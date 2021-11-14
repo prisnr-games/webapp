@@ -34,7 +34,7 @@
 	import type { MessagePanelHelper } from './MessagePanel.svelte';
 
 	import MessagePanel from './MessagePanel.svelte';
-	import Scene from './Scene.svelte';
+	import Scene, { SceneHelper } from './Scene.svelte';
 
 	/**
 	 * default client locale
@@ -72,11 +72,16 @@
 	 */
 	let k_panel: MessagePanelHelper;
 
+	/**
+	 * helper instance for communicating with Scene
+	 */
+	let k_scene: SceneHelper;
+
 	async function reveal_prepared(si_which: string) {
 		// loading messages
 		for(const g_msg of H_MESSAGES[si_which]) {
 			if(g_msg.delay) await timeout(g_msg.delay);
-			await k_panel.reveal_text(g_msg.labels[s_lang], g_msg.interval);
+			await k_panel.reveal_text(g_msg.labels[s_lang], g_msg.interval, g_msg.pause);
 		}
 	}
 
@@ -114,6 +119,21 @@
 
 		// loading messages
 		await reveal_prepared('loading');
+
+		// give chip
+		await k_panel.receive({
+			from: 'Arbiter',
+			text: [
+				'Here is your chip, player.',
+			],
+		});
+
+		// clear
+		await k_panel.reveal_text('');
+
+		// animate chip
+		await k_scene.animate_chip_entry();
+
 	});
 
 </script>
@@ -123,4 +143,6 @@
 	
 </MessagePanel>
 
-<Scene></Scene>
+<Scene bind:k_scene>
+
+</Scene>

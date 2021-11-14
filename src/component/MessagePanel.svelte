@@ -1,6 +1,6 @@
 <script context="module" lang="ts">
 	export interface MessagePanelHelper {
-		reveal_text(s_reveal: string, xt_interval?: number): Promise<void>;
+		reveal_text(s_reveal: string, xt_interval?: number, xt_pause?: number): Promise<void>;
 		commit(): Promise<void>;
 		receive(g_msg: ReceivedMessage): Promise<void>;
 	}
@@ -13,10 +13,12 @@
 
 <script lang="ts">
 	import {
-		getContext
+		getContext, onMount
 	} from 'svelte';
 
-	import { A_COLORS, SupportedLanguage } from '#/intl/game';
+	import type {
+		SupportedLanguage,
+	} from '#/intl/game';
 
 	import {
 		microtask,
@@ -26,8 +28,8 @@
 	import type {
 		GameContext,
 	 } from './App.svelte';
-import { dd } from '#/util/dom';
-import App from './App.svelte';
+
+	import { dd } from '#/util/dom';
 
 	// game context
 	const {
@@ -52,6 +54,8 @@ import App from './App.svelte';
 	 */
 	let dm_history: HTMLDivElement;
 
+	let dm_panel: HTMLDivElement;
+
 	/**
 	 * cursor character
 	*/
@@ -64,7 +68,7 @@ import App from './App.svelte';
 
 	let dm_cursor: HTMLElement;
 
-	async function reveal_text(s_reveal: string, xt_interval=60) {
+	async function reveal_text(s_reveal: string, xt_interval=60, xt_pause=0) {
 		if(!xt_interval) xt_interval = 60;
 
 		const nl_text = s_text.length;
@@ -81,6 +85,8 @@ import App from './App.svelte';
 			await timeout(xt_interval * xr_delete);
 		}
 
+		if(xt_pause) await timeout(xt_pause);
+
 		for(let i_char=i_shared; i_char<nl_reveal; i_char++) {
 			dm_cursor.classList.remove('blinking');
 			await timeout(10);
@@ -90,6 +96,10 @@ import App from './App.svelte';
 
 			await timeout(xt_interval);
 		}
+	}
+
+	async function clear(): Promise<void> {
+		await reveal_text('');
 	}
 
 	async function receive(g_msg: ReceivedMessage): Promise<void> {
@@ -133,7 +143,7 @@ import App from './App.svelte';
 			await timeout(120);
 		}
 
-		// dm_curtain.remove();
+		dm_curtain.remove();
 	}
 
 	async function commit(): Promise<void> {
@@ -146,6 +156,25 @@ import App from './App.svelte';
 		s_text = '';
 	}
 
+	let dt_attempt_last = 0;
+	async function attempt_type() {
+		debugger;
+
+		const dt_now = Date.now();
+		if(dt_now - dt_attempt_last > 30e3) {
+			await reveal_text(`sorry, you don't get to type :P`);
+			await timeout(1600);
+			await clear();
+
+			dt_attempt_last = dt_now;
+		}
+	}
+
+	onMount(() => {
+		dm_panel.addEventListener('keydown', () => {
+			attempt_type();
+		});
+	});
 
 </script>
 
@@ -199,8 +228,9 @@ import App from './App.svelte';
 		line-height: 14px;
 
 		:global(.line-commit) {
-			text-indent: -14px;
-			padding-left: 14px;
+			text-indent: -22px;
+			padding-left: 22px;
+			margin-top: 14px;
 		}
 
 		:global(.from-arbiter) {
@@ -233,7 +263,7 @@ import App from './App.svelte';
 	}
 </style>
 
-<div class="msg-panel">
+<div class="msg-panel" bind:this={dm_panel}>
 	<div class="msg-history" bind:this={dm_history}>
 	</div>
 	<div class="msg-console">

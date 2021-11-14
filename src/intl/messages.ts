@@ -10,15 +10,22 @@ export const H_MESSAGES = {
 			},
 		},
 		{
-			delay: 2500,
+			delay: 2000,
+			pause: 800,
 			labels: {
-				en: 'one sec...',
+				en: 'glad you made it!',
 			},
 		},
 		{
+			pause: 600,
 			delay: 1800,
 			labels: {
-				en: 'one sec... the Arbiter approaches...',
+				en: 'just remember that you should nev',
+			},
+		},
+		{
+			labels: {
+				en: 'the Arbiter approaches...',
 			},
 		},
 	],
@@ -26,19 +33,21 @@ export const H_MESSAGES = {
 	loading: [
 		{
 			delay: 2000,
+			interval: 200,
 			labels: {
-				en: 'loading',
+				en: 'hmmm',
 			},
 		},
 		{
 			delay: 250,
 			interval: 500,
 			labels: {
-				en: 'loading......',
+				en: 'hmmm....',
 			},
 		},
 	],
 } as Record<string, Array<Labeled & {
 	delay?: number;
 	interval?: number;
+	pause?: number;
 }>>;

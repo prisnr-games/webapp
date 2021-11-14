@@ -1,3 +1,9 @@
+<script context="module" lang="ts">
+	export interface SceneHelper {
+		animate_chip_entry(): Promise<void>;
+	}
+</script>
+
 <script lang="ts">
 	import {
 		onMount,
@@ -24,7 +30,26 @@
 		Texture,
 		TextureLoader,
 		SpotLight,
+		VectorKeyframeTrack,
+		AnimationClip,
+		AnimationMixer,
+		LoopOnce,
+		Clock,
+		Euler,
 	} from 'three';
+
+	import {
+		Tween,
+		Easing,
+		update as updateTween,
+	} from '@tweenjs/tween.js';
+
+	import { timeout } from '#/util/belt';
+	import { qs } from '#/util/dom';
+
+	const X_PI = Math.PI;
+
+	export let k_scene: SceneHelper;
 
 	let dm_container: HTMLDivElement;
 
@@ -46,16 +71,27 @@
 	}
 
 	onMount(async() => {
+		// set scene helper
+		k_scene = {
+			animate_chip_entry,
+		};
+
 		const h_textures = await load_textures({
 			chip: '/asset/chip.png',
 			chip_displace: '/asset/chip-displacement.png',
 		});
 
-		const y_renderer = new WebGLRenderer();
-		y_renderer.setSize(window.innerWidth, window.innerHeight);
+		const y_renderer = new WebGLRenderer({
+			antialias: true,
+		});
+
+		const g_rect = qs(document.body, '.msg-panel').getBoundingClientRect();
+		const xl_width = window.innerWidth;
+		const xl_height = Math.max(400, Math.min(800, window.innerHeight - g_rect.bottom));
+		y_renderer.setSize(xl_width, xl_height);
 		dm_container.appendChild(y_renderer.domElement);
 
-		const xr_aspect = window.innerWidth / window.innerHeight;
+		const xr_aspect = xl_width / xl_height;
 
 		// create scene
 		const y_scene = new Scene();
@@ -63,48 +99,19 @@
 		// camera
 		const y_camera = new PerspectiveCamera(45, xr_aspect, 1, 5000);
 		{
-			y_camera.position.set(0, 120, -50);
+			y_camera.position.set(0, 0, 140);
 			y_camera.lookAt(0, 0, 0);
 		}
 
-		// {
-		// 	const ym_mat = new MeshBasicMaterial({
-		// 		color: 'red',
-		// 	});
-		// 	const y_cube = new Mesh(new BoxGeometry(1, 1, 1), ym_mat);
-		// 	y_scene.add(y_cube);
-		// }
+		// player chip
+		const ym_chip = chip(h_textures.chip, h_textures.chip_displace);
+		{
+			// hide chip until ready to animate
+			ym_chip.visible = false;
 
-		// //create a blue LineBasicMaterial
-		// const y_material = new LineBasicMaterial( { color: 0x0000ff } );
-		
-
-		// const a_points = [];
-		// a_points.push(new Vector3( - 10, 0, 0));
-		// a_points.push(new Vector3( 0, 10, 0 ));
-		// a_points.push(new Vector3( 10, 0, 0 ));
-
-		// const y_geometry = new BufferGeometry();
-		// y_geometry.setAttribute('position', new BufferAttribute(new Float32Array([
-		// 	-10, 0, 0,
-		// 	0, 10, 0,
-		// 	10, 0, 0,
-		// ]), 3));
-
-
-		// const line = new Line(y_geometry, y_material);
-
-		// const y_light_point = new PointLight();
-		// y_light_point.position.set(0, 100, 10);
-		// y_scene.add(y_light_point);
-
-		// const ym_helpr = new PointLightHelper(y_light_point, 10);
-		// y_scene.add(y_light_point);
-
-		const ym_chip = chip(h_textures.chip, h_textures.chip_displace
-		);
-
-		y_scene.add(ym_chip);
+			// add chip to scene
+			y_scene.add(ym_chip);
+		}
 		
 		// ambient light
 		{
@@ -115,7 +122,7 @@
 		// player's chip spot light
 		{
 			const yl_spot = new SpotLight();
-			yl_spot.position.set(0, 100, -50);
+			yl_spot.position.set(0, 100, 50);
 			yl_spot.decay = 2.5;
 			// yl_spot.castShadoow = true;
 			yl_spot.angle = Math.PI / 9;
@@ -124,8 +131,56 @@
 			y_scene.add(yl_spot);
 		}
 
+		let y_clock: Clock;
+
 		// render
-		y_renderer.render(y_scene, y_camera);
+		function render() {
+			y_renderer.render(y_scene, y_camera);
+		}
+
+		y_renderer.setAnimationLoop(() => {
+			render();
+			updateTween();
+		});
+
+		async function animate_chip_entry() {
+			// put it way out there
+			ym_chip.position.y = 800000;
+
+			// show chip
+			ym_chip.visible = true;
+
+			const y_tween_pos = new Tween(new Vector3(-780, -2450, -3000))
+				.to(new Vector3(0, 0, 0), 4000)
+				.easing(Easing.Cubic.Out)
+				.onUpdate((yv_pos) => {
+					// ym_chip.position.copy(yv_pos);
+					ym_chip.position.setX(yv_pos.x);
+					ym_chip.position.setZ(yv_pos.z);
+				});
+			
+			y_tween_pos.start();
+
+
+			const y_tween_y = new Tween({y: 750})
+				.to({y: 0}, 4000)
+				.easing(Easing.Back.Out)
+				.onUpdate(({y:x_y}) => {
+					ym_chip.position.setY(x_y);
+				});
+			
+			y_tween_y.start();
+
+			const y_tween_rot = new Tween(new Euler(0, 0, 0))
+				.to(new Euler(0, X_PI / 2, (X_PI / 2) - (X_PI / 6)), 4000)
+				.easing(Easing.Cubic.Out)
+				.onUpdate((yv_rot) => {
+					ym_chip.rotation.set(yv_rot.x, yv_rot.y, yv_rot.z);
+				});
+			
+			y_tween_rot.start();
+
+		};
 	});
 </script>
 

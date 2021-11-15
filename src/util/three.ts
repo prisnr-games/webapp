@@ -18,17 +18,26 @@ import {
 } from 'three';
 
 
-export function chip(y_texture: Texture, y_displacement: Texture): Mesh {
+export function chip(y_texture: Texture, y_bump: Texture): Mesh {
 	const y_geom = new CylinderGeometry(39, 39, 3.3, 128, 1);
+
+	// // rotate bump map random amount
+	// y_bump.center.set(0.5, 0.5);
+	// y_bump.rotation = Math.random() * (Math.PI * 2);
 
 	const a_materials = [
 		new MeshToonMaterial({
 			color: 'red',
 		}),
-		new MeshToonMaterial({
+		// new MeshToonMaterial({
+		// 	map: y_texture,
+		// 	bumpMap: y_bump,
+		// 	bumpScale: -1,
+		// }),
+		new MeshPhongMaterial({
 			map: y_texture,
-			// bumpMap: y_displacement,
-			// bumpScale: -1,
+			bumpMap: y_bump,
+			bumpScale: (Math.random() * 0.2) + 0.2,
 		}),
 		new MeshToonMaterial({
 			map: y_texture,
@@ -47,9 +56,6 @@ export function chip(y_texture: Texture, y_displacement: Texture): Mesh {
 		} else {
 			ys_cover.lineTo(x, y);
 		}
-
-		// // ys_cover.
-		// ys_cover.makeGeometry();
 	}
 
 	return new Mesh(y_geom, a_materials);

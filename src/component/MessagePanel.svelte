@@ -68,7 +68,12 @@
 
 	let dm_cursor: HTMLElement;
 
+	let i_iter = 0;
+
 	async function reveal_text(s_reveal: string, xt_interval=60, xt_pause=0) {
+		// set latest
+		let i_latest = ++i_iter;
+
 		if(!xt_interval) xt_interval = 60;
 
 		const nl_text = s_text.length;
@@ -83,18 +88,31 @@
 		for(let i_delete=nl_text; i_delete>i_shared; i_delete--) {
 			s_text = s_text.slice(0, -1);
 			await timeout(xt_interval * xr_delete);
+
+			// no longer latest; bail
+			if(i_iter !== i_latest) return;
 		}
 
 		if(xt_pause) await timeout(xt_pause);
 
+		// no longer latest; bail
+		if(i_iter !== i_latest) return;
+
 		for(let i_char=i_shared; i_char<nl_reveal; i_char++) {
 			dm_cursor.classList.remove('blinking');
 			await timeout(10);
+
+			// no longer latest; bail
+			if(i_iter !== i_latest) return;
+
 			dm_cursor.classList.add('blinking');
 
 			s_text += s_reveal[i_char];
 
 			await timeout(xt_interval);
+
+			// no longer latest; bail
+			if(i_iter !== i_latest) return;
 		}
 	}
 

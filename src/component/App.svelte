@@ -37,6 +37,7 @@ CanonicalShape,
 
 	import MessagePanel from './MessagePanel.svelte';
 	import Scene, { SceneHelper } from './Scene.svelte';
+import TransmissionControls, { TransmissionControlsHelper } from './TransmissionControls.svelte';
 
 	/**
 	 * default client locale
@@ -79,6 +80,12 @@ CanonicalShape,
 	 */
 	let k_scene: SceneHelper;
 
+	/**
+	 * helper instance for communicating with TransmissionControls
+	 */
+	let k_tx: TransmissionControlsHelper;
+
+
 	async function reveal_prepared(si_which: string) {
 		// loading messages
 		for(const g_msg of H_MESSAGES[si_which]) {
@@ -91,16 +98,16 @@ CanonicalShape,
 	let si_player_shape: CanonicalShape;
 
 	onMount(async() => {
-		// await timeout(2000);
+		await timeout(2000);
 
-		// // grab user attention
-		// await reveal_prepared('attention');
+		// grab user attention
+		await reveal_prepared('attention');
 
-		// // beat
-		// await timeout(1800);
+		// beat
+		await timeout(1800);
 
-		// // clear
-		// await k_panel.reveal_text('');
+		// clear
+		await k_panel.reveal_text('');
 
 		// beat
 		await timeout(1200);
@@ -118,13 +125,13 @@ CanonicalShape,
 		});
 
 		// beat
-		await timeout(1500);
-
-		// // loading messages
-		// await reveal_prepared('loading');
+		await timeout(4600)
 
 		si_player_color = Object.keys(H_COLORS)[Math.floor(Math.random() * 4)];
 		si_player_shape = Object.keys(H_SHAPES)[Math.floor(Math.random() * 4)];
+
+		// clear
+		await k_panel.reveal_text('');
 
 		// give chip
 		await k_panel.receive({
@@ -133,9 +140,6 @@ CanonicalShape,
 				`Here is your chip, player.`,
 			],
 		});
-
-		// clear
-		await k_panel.reveal_text('');
 
 		// animate chip
 		await k_scene.animate_chip_entry(si_player_color, si_player_shape);
@@ -149,7 +153,6 @@ CanonicalShape,
 			],
 		})
 
-
 		await timeout(3600);
 
 		await k_panel.receive({
@@ -159,121 +162,61 @@ CanonicalShape,
 			],
 		});
 
+		await timeout(6800);
+
+		await k_panel.receive({
+			from: 'Arbiter',
+			text: [
+				'Now you must choose what to tell the other player.',
+			],
+		});
+
+		await k_tx.show();
+
+		await timeout(4000);
+
+		reveal_tx();
 	});
+
+	let si_basis = 'the bag cannot be';
+	let s_quality = '';
+
+	function reveal_tx() {
+		k_panel.reveal_text(`${si_basis} ${s_quality || '...'}`);
+	}
+
+	function select_basis(g_evt: CustomEvent<'bag' | 'chip'>) {
+		if('bag' === g_evt.detail) {
+			si_basis = 'the bag cannot be';
+		}
+		else {
+			si_basis = 'my chip is';
+		}
+
+		s_quality = '';
+
+		reveal_tx();
+	}
+
+	function select_color(g_evt: CustomEvent<CanonicalColor | CanonicalShape>) {
+		s_quality = g_evt.detail;
+
+		reveal_tx();
+	}
+
+	function select_shape(g_evt: CustomEvent<CanonicalColor | CanonicalShape>) {
+		s_quality = `a ${g_evt.detail}`;
+
+		reveal_tx();
+	}
 
 </script>
 
 <style lang="less">
 	.container {
 		position: relative;
-
-		.tx-basis {
-			position: absolute;
-			top: 0;
-			left: 50% - 200px;
-			width: 400px;
-			display: flex;
-
-			li {
-				// flex
-
-				.active {
-					border: 1px solid #777777;
-					background: linear-gradient();
-				}
-			}
-		}
 	}
 
-	.tx-colors {
-		position: absolute;
-		left: calc(50% - 420px);
-		top: 80px;
-	}
-
-	.diamond {
-		@diamond-radius: 9px;
-		@cell-length: 50px;
-		@cell-scale-x: 1.2;
-
-		transform: scaleX(@cell-scale-x) rotate(45deg);
-		display: table;
-
-		&>span {
-			display: table-row;
-			width: @cell-length * 2;
-			height: @cell-length;
-
-			&:last-child {
-				position: relative;
-				top: -1px;
-			}
-
-			&>button {
-				display: table-cell;
-				width: @cell-length;
-				height: @cell-length;
-				border: 1px solid black;
-				margin: 0;
-				color: white;
-				cursor: pointer;
-
-				&:active {
-					color: rgba(255, 255, 255, 0.6);
-				}
-
-				&:active>* {
-					text-decoration-color: white !important;
-				}
-
-				&:hover>* {
-					text-decoration: overline;
-					text-decoration-thickness: 2px;
-					text-decoration-color: rgba(255, 255, 255, 0.6);
-				}
-
-				&:last-child {
-					margin-left: -1px;
-				}
-
-				&.diamond-top {
-					border-top-left-radius: @diamond-radius;
-				}
-				&.diamond-lft {
-					border-bottom-left-radius: @diamond-radius;
-				}
-				&.diamond-rgt {
-					border-top-right-radius: @diamond-radius;
-				}
-				&.diamond-btm {
-					border-bottom-right-radius: @diamond-radius;
-				}
-
-				&.color-red {
-					background: #a00000;
-					background: linear-gradient(0deg, #d00000 0%, #a00000 100%);
-				}
-				&.color-green {
-					background: #008000;
-					background: linear-gradient(0deg, #00b000 0%, #008000 100%);
-				}
-				&.color-blue {
-					background-color: #0000a0;
-					background: linear-gradient(0deg, #0000d0 0%, #0000a0 100%);
-				}
-				&.color-black {
-					background-color: #000000;
-					background: linear-gradient(0deg, #303030 0%, #000000 100%);
-				}
-
-				&>span {
-					width: @cell-length;
-					display: inline-block;
-					transform: translate(-7px, 0) rotate(-45deg) scaleX((1 / @cell-scale-x));
-				}
-			}
-		}
-	}
 </style>
 
 <MessagePanel bind:k_panel>
@@ -281,29 +224,9 @@ CanonicalShape,
 </MessagePanel>
 
 <div class="container">
-	<ul class="tx-basis">
-		<li>My chip is</li>
-		<li>The bag is NOT</li>
-	</ul>
+	<TransmissionControls bind:k_tx on:basis={select_basis} on:color={select_color} on:shape={select_shape}>
 
-	<span class="diamond tx-colors" style="display:none">
-		<span>
-			<button class="diamond-top color-red">
-				<span>Red</span>
-			</button>
-			<button class="diamond-rgt color-blue">
-				<span>Blue</span>
-			</button>
-		</span>
-		<span>
-			<button class="diamond-lft color-green">
-				<span>Green</span>
-			</button>
-			<button class="diamond-btm color-black">
-				<span>Black</span>
-			</button>
-		</span>
-	</span>
+	</TransmissionControls>
 
 	<Scene bind:k_scene>
 

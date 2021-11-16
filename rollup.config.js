@@ -8,6 +8,7 @@ import sveltePreprocess from 'svelte-preprocess';
 import typescript from '@rollup/plugin-typescript';
 import ttypescript from 'ttypescript';
 import css from 'rollup-plugin-css-only';
+import json from '@rollup/plugin-json';
 
 import path from 'path';
 
@@ -55,7 +56,7 @@ export default {
 		file: 'public/build/bundle.js'
 	},
 	plugins: [
-
+		json(),
 		svelte({
 			preprocess: sveltePreprocess({
 				sourceMap: !production,

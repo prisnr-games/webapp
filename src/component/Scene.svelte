@@ -126,7 +126,23 @@ import { CanonicalColor, CanonicalShape, H_COLORS } from '#/intl/game';
 			}
 
 			case 'star': {
+				const x_pi_5 = X_PI / 5;
 
+				const xr_star = Math.sqrt((2 * x_area) / (5 * Math.sin(x_pi_5)));
+
+				let xa_spike = -1.5 * x_pi_5;
+
+				yp_shape.moveTo(x_center, x_center - xr_star);
+				for(let i_spike=0; i_spike<9; i_spike++) {
+					const xr_spike = xr_star * (((i_spike % 2) + 1) / 2);
+
+					yp_shape.lineTo(
+						x_center + (xr_spike * Math.cos(xa_spike)),
+						x_center + (xr_spike * Math.sin(xa_spike))
+					);
+
+					xa_spike += x_pi_5;
+				}
 				break;
 			}
 		}

@@ -44,9 +44,8 @@ export function chip(y_texture: Texture, y_bump: Texture): Mesh {
 		}),
 	];
 
-	{
-		const ys_cover = new Shape();
-		for(var i = 0; i < 16; i++) {
+	const ys_cover = new Shape();
+	for(var i = 0; i < 16; i++) {
 		var pct = (i + 1) / 16;
 		var theta = pct * Math.PI * 2.0;
 		var x = 10 * Math.cos(theta);

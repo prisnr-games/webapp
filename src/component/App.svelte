@@ -20,8 +20,8 @@
 		H_LANGUAGES,
 		H_COLORS,
 		H_SHAPES,
-CanonicalColor,
-CanonicalShape,
+		CanonicalColor,
+		CanonicalShape,
 	} from '#/intl/game';
 
 	import {
@@ -37,12 +37,14 @@ CanonicalShape,
 
 	import MessagePanel from './MessagePanel.svelte';
 	import Scene, { SceneHelper } from './Scene.svelte';
-import TransmissionControls, { TransmissionControlsHelper } from './TransmissionControls.svelte';
+	import TransmissionControls, { TransmissionControlsHelper } from './TransmissionControls.svelte';
 
 	// Added by Ben -- connecting to keplr needs polyfills
 	//
+	
 	import { keplrStore } from '#/network/keplr';
 	import type { KeplrStore } from '#/network/keplr';
+
 	let keplr: KeplrStore;
 	onMount( async () => {
 		await keplrStore.connect();
@@ -51,7 +53,7 @@ import TransmissionControls, { TransmissionControlsHelper } from './Transmission
 			keplr = value;
 		});
 	});
-	$: scrtAuthorized = keplr && keplr.scrtAuthorized
+	$: scrtAuthorized = keplr && keplr.scrtAuthorized;
 	//
 	//
 

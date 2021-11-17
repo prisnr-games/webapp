@@ -1,6 +1,6 @@
-import { keplrStore } from "./keplr";
-import { get } from 'svelte/store';
-import { Permit } from "./permits";
+//import { keplrStore } from "./keplr";
+//import { get } from 'svelte/store';
+//import { Permit } from "./permits";
 
 export const CONTRACT = 'secretxyz';
 

@@ -38,24 +38,55 @@
 	import MessagePanel from './MessagePanel.svelte';
 	import Scene, { SceneHelper } from './Scene.svelte';
 	import TransmissionControls, { TransmissionControlsHelper } from './TransmissionControls.svelte';
-
-	// Added by Ben -- connecting to keplr needs polyfills
-	//
 	
-	import { keplrStore } from '#/network/keplr';
+	import { holdForKeplr, keplrStore, getSignature, CHAIN_ID } from '#/network/keplr';
 	import type { KeplrStore } from '#/network/keplr';
+	import { permitName, permitsStore, Permit, PermitParams, Permits } from '#/network/permits';
+	import { CONTRACT } from '#/network/contract';
+
+	let permits: Permits;
+	permitsStore.subscribe((value: Permits) => {
+		permits = value;
+	});
 
 	let keplr: KeplrStore;
 	onMount( async () => {
 		await keplrStore.connect();
 		console.log("Keplr connected");
-		keplrStore.subscribe((value: KeplrStore) => {
-			keplr = value;
-		});
 	});
+	keplrStore.subscribe((value: KeplrStore) => {
+		keplr = value;
+	});
+
+	let permit: Permit;
+	onMount( async () => {
+		await holdForKeplr(keplr);
+        const { scrtClient } = keplr;
+		if (!scrtClient) { return; }
+
+		if (permits[scrtClient.senderAddress]) {
+			permit = permits[scrtClient.senderAddress];
+		} else {
+			try {
+				let signature = await getSignature(CHAIN_ID);
+				let permit_params: PermitParams = {
+					allowed_tokens: [CONTRACT],
+					chain_id: CHAIN_ID,
+					permit_name: permitName,
+					permissions: ["owner"],
+				};
+				permit = {
+					params: permit_params,
+					signature
+				}
+				permitsStore.set({...permits, [scrtClient.senderAddress]: permit});
+			} catch (err: any) {
+				console.log(err.toString());
+			}
+		}
+	})
+
 	$: scrtAuthorized = keplr && keplr.scrtAuthorized;
-	//
-	//
 
 	/**
 	 * default client locale

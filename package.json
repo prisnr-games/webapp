@@ -15,6 +15,7 @@
     "@types/crypto-js": "^4.0.2",
     "@types/three": "^0.134.0",
     "@zerollup/ts-transform-paths": "^1.7.18",
+    "crypto-js": "^4.1.1",
     "less": "^4.1.2",
     "localstorage-slim": "^2.2.0",
     "secretjs": "^0.17.3",

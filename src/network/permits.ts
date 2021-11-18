@@ -1,7 +1,7 @@
 import { writable } from 'svelte/store';
 import ls from 'localstorage-slim';
-//import encUTF8 from 'crypto-js/enc-utf8.js';
-//import AES from 'crypto-js/aes.js';
+import encUTF8 from 'crypto-js/enc-utf8.js';
+import AES from 'crypto-js/aes.js';
 
 export const permitName = "Scrt Prisoners";
 
@@ -27,8 +27,11 @@ export interface Permit {
     signature: Signature,
 }
 
-/*
-ls.config.encrypt = false;         // global encryption
+export interface Permits {
+    [property: string]: Permit;
+}
+
+ls.config.encrypt = true;         // global encryption
 ls.config.secret = 'font-size';   // global secret
 
 // update encrypter to use AES encryption
@@ -45,11 +48,10 @@ ls.config.decrypter = (data, secret) => {
         return data;
     }
 };
-*/
 
-export const permitsStore = writable<object>(ls.get('permits') || {});
+export const permitsStore = writable<Permits>(ls.get('permits') || {});
 
-permitsStore.subscribe(value => {
+permitsStore.subscribe((value: Permits) => {
     ls.set('permits', value);
 });
 

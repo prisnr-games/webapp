@@ -166,10 +166,6 @@ import { microtask } from '#/util/belt';
 			filter: blur(0px) !important;
 		}
 	}
-
-	// :global() {
-	// 	filter: blur(0px) !important;
-	// }
 </style>
 
 <div class="prompt" class:showing={b_showing}>

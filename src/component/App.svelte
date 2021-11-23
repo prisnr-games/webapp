@@ -291,8 +291,8 @@
 		k_panel.reveal_text(`${si_basis} ${s_quality || '...'}`);
 	}
 
-	function select_basis(g_evt: CustomEvent<'bag' | 'chip'>) {
-		if('bag' === g_evt.detail) {
+	function select_basis(g_evt: CustomEvent<'nobody' | 'chip'>) {
+		if('nobody' === g_evt.detail) {
 			si_basis = 'nobody has';
 		}
 		else {

@@ -100,3 +100,22 @@ export const uuid_v4 = (): string => {
 		return ('x' === s? x_r: ((x_r & 0x3) | 0x8)).toString(16);
 	});
 };
+
+export function read_cookie(): Record<string, string> {
+	return document.cookie.split(';').reduce((h_out, s_cookie) => {
+		const a_split = s_cookie.trim().split('=');
+		return {
+			...h_out,
+			[a_split[0]]: a_split.slice(1).join('='),
+		};
+	}, {});
+}
+
+export function write_cookie(h_cookie: Record<string, string>, xt_expires: number) {
+	document.cookie = Object.entries({
+		...h_cookie,
+		'max-age': ''+xt_expires,
+	})
+		.map(([si_key, s_value]) => `${si_key}=${s_value}`)
+		.join('; ');
+}

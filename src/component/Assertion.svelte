@@ -1,5 +1,5 @@
 <script context="module" lang="ts">
-	export interface TransmissionControlsHelper {
+	export interface AssertionHelper {
 		show(): Promise<void>;
 	}
 </script>
@@ -22,7 +22,7 @@ import { timeout } from '#/util/belt';
 
 	export let k_tx = {
 		show,
-	} as TransmissionControlsHelper;
+	} as AssertionHelper;
 
 	const dispatch = createEventDispatcher();
 
@@ -229,11 +229,11 @@ import { timeout } from '#/util/belt';
 {#if b_visible}
 	<div class="tx-basis" transition:fade={{duration:3600, easing:quadInOut}}>
 		<span class="tab-wrap">
-			<span class="active tab" on:click={select_basis} data-basis="bag">
-				The bag CANNOT be
+			<span class="active tab" on:click={select_basis} data-basis="nobody">
+				Nobody has...
 			</span>
 			<span class="tab" on:click={select_basis} data-basis="chip">
-				My chip is
+				My chip is...
 			</span>
 		</span>
 	</div>
@@ -268,7 +268,7 @@ import { timeout } from '#/util/belt';
 		</span>
 		<span>
 			<button class="diamond-lft bg-rad-lft" data-shape="square" on:click={select_shape}>
-				<span>▆</span>
+				<span>■</span>
 			</button>
 			<button class="diamond-btm bg-rad-btm" data-shape="star" on:click={select_shape}>
 				<span>★</span>

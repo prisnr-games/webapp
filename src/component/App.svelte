@@ -29,15 +29,19 @@
 	} from '#/intl/messages';
 
 	import {
+		read_cookie,
+		write_cookie,
+	} from '#/util/dom';
+
+	import {
 		microtask,
 		oder, timeout,
 	} from '#/util/belt';
 
-	import type { MessagePanelHelper } from './MessagePanel.svelte';
-
-	import MessagePanel from './MessagePanel.svelte';
-	import Scene, { SceneHelper } from './Scene.svelte';
-	import TransmissionControls, { TransmissionControlsHelper } from './TransmissionControls.svelte';
+	import MessagePanel, {MessagePanelHelper} from './MessagePanel.svelte';
+	import Prompt, {PromptHelper} from './Prompt.svelte';
+	import Assertion, {AssertionHelper} from './Assertion.svelte';
+	import Scene, {SceneHelper} from './Scene.svelte';
 	
 	import { holdForKeplr, keplrStore, getSignature, CHAIN_ID } from '#/network/keplr';
 	import type { KeplrStore } from '#/network/keplr';
@@ -50,10 +54,11 @@
 	});
 
 	let keplr: KeplrStore;
-	onMount( async () => {
-		await keplrStore.connect();
-		console.log("Keplr connected");
-	});
+	// onMount( async () => {
+	// 	await keplrStore.connect();
+	// 	console.log("Keplr connected");
+	// });
+
 	keplrStore.subscribe((value: KeplrStore) => {
 		keplr = value;
 	});
@@ -130,9 +135,14 @@
 	let k_scene: SceneHelper;
 
 	/**
-	 * helper instance for communicating with TransmissionControls
+	 * helper instance for communicating with Assertion
 	 */
-	let k_tx: TransmissionControlsHelper;
+	let k_tx: AssertionHelper;
+
+	/**
+	 * helper instance for communicating with Prompt
+	 */
+	let k_prompt: PromptHelper;
 
 
 	async function reveal_prepared(si_which: string) {
@@ -146,7 +156,8 @@
 	let si_player_color: CanonicalColor;
 	let si_player_shape: CanonicalShape;
 
-	onMount(async() => {
+	async function introduction(): Promise<void> {
+		// take a beat to apreciate the blank, dark page
 		await timeout(2000);
 
 		// grab user attention
@@ -160,12 +171,48 @@
 
 		// beat
 		await timeout(1200);
+	}
+
+	async function welcome_back(): Promise<void> {
+		// welcome back message
+		await k_panel.reveal_text('welcome back :)');
+
+		// beat
+		await timeout(1800);
+
+		// welcome back message
+		await k_panel.reveal_text('');
+	}
+
+	onMount(async() => {
+		// read cookie
+		let h_cookie = read_cookie();
+
+		// ref last seen value
+		let s_last_seen = h_cookie.last_seen;
+
+		// hasn't seen introduction yet; run introduction
+		if(!s_last_seen) {
+			await introduction();
+		}
+		// returning; welcome back
+		else {
+			await welcome_back();
+		}
+
+		// set last seen value, expires in 30 days
+		write_cookie({
+			last_seen: ''+Date.now(),
+		}, 60*60*24*30);
+
+		// re-read cookie
+		h_cookie = read_cookie();
 
 		// gameplay explanation
 		await k_panel.receive({
 			from: 'Arbiter',
 			text: `
-				Welcome, player, to my game of secrets.
+				Welcome${s_last_seen? ' back': ''}, player, to my game of secrets.
 
 				Four colors: Red, Green, Blue and Black. Four shapes: Triangle, Square, Circle and Star.
 
@@ -174,7 +221,17 @@
 		});
 
 		// beat
-		await timeout(4600)
+		await timeout(s_last_seen? 800: 4600);
+
+		// ask if ready to join
+		await k_panel.reveal_text('ready to play?');
+
+		// wait for response
+		await k_prompt.ok('Connect Wallet');
+
+		// connect to keplr
+		await keplrStore.connect();
+
 
 		si_player_color = Object.keys(H_COLORS)[Math.floor(Math.random() * 4)];
 		si_player_shape = Object.keys(H_SHAPES)[Math.floor(Math.random() * 4)];
@@ -227,7 +284,7 @@
 		reveal_tx();
 	});
 
-	let si_basis = 'the bag cannot be';
+	let si_basis = 'noboody has';
 	let s_quality = '';
 
 	function reveal_tx() {
@@ -236,7 +293,7 @@
 
 	function select_basis(g_evt: CustomEvent<'bag' | 'chip'>) {
 		if('bag' === g_evt.detail) {
-			si_basis = 'the bag cannot be';
+			si_basis = 'nobody has';
 		}
 		else {
 			si_basis = 'my chip is';
@@ -273,9 +330,13 @@
 </MessagePanel>
 
 <div class="container">
-	<TransmissionControls bind:k_tx on:basis={select_basis} on:color={select_color} on:shape={select_shape}>
+	<Prompt bind:k_prompt>
 
-	</TransmissionControls>
+	</Prompt>
+
+	<Assertion bind:k_tx on:basis={select_basis} on:color={select_color} on:shape={select_shape}>
+
+	</Assertion>
 
 	<Scene bind:k_scene>
 

@@ -1,218 +1,300 @@
 import { get, writable } from "svelte/store";
-import type { ChainInfo, Window as KeplrWindow } from "@keplr-wallet/types";
-import { SigningCosmWasmClient } from 'secretjs';
+import type { ChainInfo, Keplr, Key } from "@keplr-wallet/types";
+// import { SigningCosmWasmClient } from 'secretjs';
 import type { StdSignature } from "secretjs/types/types";
 import { permitName } from "./permits";
 import { CONTRACT } from "./contract";
+import { timeout } from '#/util/belt';
 
-// Local testnet
-export const CHAIN_ID = 'supernova-1';
-export const SECRET_LCD = 'http://localhost:1317';
+import {
+	WalletError,
+} from './wallet';
 
-declare global {
-    // eslint-disable-next-line @typescript-eslint/no-empty-interface
-    interface Window extends KeplrWindow {}
+import type {
+	Wallet,
+	SecretChainInfo,
+} from './wallet';
+
+import type {
+	AccountData,
+	OfflineSigner,
+} from 'secretjs/types/wallet';
+
+import type {
+	SecretUtils,
+} from 'secretjs/types/enigmautils';
+
+export class EnableKeplrError extends WalletError {
+	constructor(e_enable: unknown) {
+		super('While attempting to enable Keplr', e_enable);
+	}
 }
 
-export interface KeplrStore {
-    keplrEnabled: boolean;
-    scrtAuthorized: boolean;
-    scrtClient: SigningCosmWasmClient | null;
-};
-
-function createKeplrStore() {
-    let keplrStoreNew: KeplrStore = {
-        keplrEnabled: false,
-        scrtAuthorized: false,
-        scrtClient: null,
-    };
-
-	const { subscribe, set, update } = writable(keplrStoreNew);
-
-	return {
-		subscribe,
-		connect: async () => {
-            console.log("connect to keplr");
-            const keplr = await connectKeplr(CHAIN_ID, SECRET_LCD);
-            set(keplr);
-        },
-	};
+export class OfflineSignerError extends WalletError {
+	constructor(e_signer: unknown) {
+		super('While attempting to acquire offline signer', e_signer);
+	}
 }
 
-async function checkKeplr(chainId: string) {
-    let keplrEnabled = false;
-    const keplrCheckPromise = new Promise<void> ( (resolve, reject) => {
-        const keplrCheckInterval = setInterval(async () => {
-            let isKeplrWallet = !!window.keplr && !!window.getOfflineSigner && !!window.getEnigmaUtils;
-            if (isKeplrWallet) {
-                keplrEnabled = true;
-                clearInterval(keplrCheckInterval);
-
-                if (chainId === 'supernova-2' || chainId === 'supernova-1') {
-                    await suggestChain(chainId);
-                }
-                resolve();
-            }
-        }, 1000);
-    });
-    await keplrCheckPromise;
-    return keplrEnabled;
+export class EnigmaUtilsError extends WalletError {
+	constructor(e_enigma: unknown) {
+		super('While attempting to acquire enigma utils', e_enigma);
+	}
 }
 
-async function connectKeplr(chainId: string, secretLcd: string) {
-    let keplrEnabled = await checkKeplr(chainId);
-    let scrtAuthorized = false;
-    let scrtClient: SigningCosmWasmClient | null = null;
-    try {
-        // @ts-ignore
-        await window.keplr.enable(chainId);
-        // @ts-ignore
-        const offlineSigner = window.getOfflineSigner(chainId);
-        // @ts-ignore
-        const enigmaUtils = window.getEnigmaUtils(chainId);
-        const accounts = await offlineSigner.getAccounts();
-        const cosmJS = new SigningCosmWasmClient(
-            secretLcd,
-            accounts[0].address,
-            // @ts-ignore
-            offlineSigner,
-            enigmaUtils,
-            {
-                exec: {
-                    amount: [{ amount: "62500", denom: "uscrt" }],
-                    gas: "250000",
-                },
-            }
-        );
-        scrtAuthorized = true;
-        scrtClient = cosmJS;
-    } catch (error) {
-        scrtAuthorized = false;
-        scrtClient = null;
-    }
-    let keplr: KeplrStore = {
-        keplrEnabled,
-        scrtAuthorized,
-        scrtClient,
-    };
-    return keplr;
+export class KeplrWallet implements Wallet {
+	static isAvailable(): boolean {
+		return !!window.keplr;
+	}
+
+	static fromWindow(): KeplrWallet {
+		if(window.keplr) {
+			return new KeplrWallet(window.keplr);
+		}
+		else {
+			throw new Error(`Keplr extension is not installed`);
+		}
+	}
+
+	protected _k_keplr: Keplr;
+	protected _si_chain!: string;
+	protected _k_signer!: OfflineSigner;
+	protected _k_enigma!: SecretUtils;
+	protected _g_key!: Key;
+	protected _a_accounts!: readonly AccountData[];
+
+	protected constructor(k_keplr: Keplr) {
+		this._k_keplr = k_keplr;
+	}
+
+	async enable(g_chain: SecretChainInfo): Promise<boolean> {
+		const si_chain = this._si_chain = g_chain.chainId;
+
+		// enable
+		try {
+			await this._k_keplr.enable(si_chain);
+		}
+		catch(e_enable: unknown) {
+			throw new EnableKeplrError(e_enable);
+		}
+
+		// offline signer
+		try {
+			this._k_signer = window.getOfflineSigner!(si_chain) as unknown as OfflineSigner;
+		}
+		catch(e_signer: unknown) {
+			throw new OfflineSignerError(e_signer);
+		}
+
+		// enigma utils
+		try {
+			this._k_enigma = window.getEnigmaUtils!(si_chain);
+		}
+		catch(e_enigma: unknown) {
+			throw new EnigmaUtilsError(e_enigma);
+		}
+		
+		// suggest chain
+		try {
+			await this._k_keplr.experimentalSuggestChain({
+				chainId: si_chain,
+				chainName: g_chain.chainName,
+				rpc: g_chain.rpc,
+				rest: g_chain.rest,
+				bip44: {
+					coinType: 529,
+				},
+				coinType: 529,
+				stakeCurrency: {
+					coinDenom: 'SCRT',
+					coinMinimalDenom: 'uscrt',
+					coinDecimals: 6,
+				},
+				bech32Config: {
+					bech32PrefixAccAddr: 'secret',
+					bech32PrefixAccPub: 'secretpub',
+					bech32PrefixValAddr: 'secretvaloper',
+					bech32PrefixValPub: 'secretvaloperpub',
+					bech32PrefixConsAddr: 'secretvalcons',
+					bech32PrefixConsPub: 'secretvalconspub',
+				},
+				currencies: [
+					{
+						coinDenom: 'SCRT',
+						coinMinimalDenom: 'uscrt',
+						coinDecimals: 6,
+					},
+				],
+				feeCurrencies: [
+					{
+						coinDenom: 'SCRT',
+						coinMinimalDenom: 'uscrt',
+						coinDecimals: 6,
+					},
+				],
+				gasPriceStep: {
+					low: 0.1,
+					average: 0.25,
+					high: 0.4,
+				},
+				features: ['secretwasm'],
+			});
+		}
+		catch(e_suggest) {
+			return false;
+		}
+
+		// save key
+		this._g_key = await this._k_keplr.getKey(si_chain);
+
+		// save accounts
+		this._a_accounts = await this._k_signer.getAccounts();
+
+		// worked
+		return true;
+	}
+
+	get key(): Key {
+		return this._g_key;
+	}
+
+	get accounts(): readonly AccountData[] {
+		return this._a_accounts;
+	}
 }
 
-async function suggestChain(chainId: string) : Promise<boolean> {
-    let rpc, rest, chainName : string;
+// export interface KeplrStore {
+// 	keplrEnabled: boolean;
+// 	scrtAuthorized: boolean;
+// 	scrtClient: SigningCosmWasmClient | null;
+// };
 
-    if (chainId === 'supernova-1') {
-        rpc = "http://localhost:26657/";
-        rest = SECRET_LCD;
-        chainName = "Localhost SCRT Testnet";
-    } else if (chainId === 'supernova-2') {
-        rpc = "https://chainofsecrets.secrettestnet.io:26667/";
-        rest = SECRET_LCD;
-        chainName = "Supernova-2 Secret Testnet";
-    } else {
-        return false;
-    }
+// function createKeplrStore() {
+// 	let keplrStoreNew: KeplrStore = {
+// 		keplrEnabled: false,
+// 		scrtAuthorized: false,
+// 		scrtClient: null,
+// 	};
 
-    let newChain: ChainInfo = {
-        chainId: chainId,
-        bip44: {
-            coinType: 529,
-        },
-        coinType: 529,
-        stakeCurrency: {
-            coinDenom: 'SCRT',
-            coinMinimalDenom: 'uscrt',
-            coinDecimals: 6,
-        },
-        bech32Config: {
-            bech32PrefixAccAddr: 'secret',
-            bech32PrefixAccPub: 'secretpub',
-            bech32PrefixValAddr: 'secretvaloper',
-            bech32PrefixValPub: 'secretvaloperpub',
-            bech32PrefixConsAddr: 'secretvalcons',
-            bech32PrefixConsPub: 'secretvalconspub',
-        },
-        currencies: [
-            {
-                coinDenom: 'SCRT',
-                coinMinimalDenom: 'uscrt',
-                coinDecimals: 6,
-            },
-        ],
-        feeCurrencies: [
-            {
-                coinDenom: 'SCRT',
-                coinMinimalDenom: 'uscrt',
-                coinDecimals: 6,
-            },
-        ],
-        gasPriceStep: {
-            low: 0.1,
-            average: 0.25,
-            high: 0.4,
-        },
-        features: ['secretwasm'],
-        rpc,
-        rest,
-        chainName
-    };
-  
-    if (newChain.rpc && newChain.rest && window.keplr) {
-        await window.keplr.experimentalSuggestChain(newChain);
-        return true;
-    } else {
-        return false;
-    }
-}
+// 	const { subscribe, set, update } = writable(keplrStoreNew);
 
-export async function getSignature(chainId: string): Promise<StdSignature> {
-    // @ts-ignore
-    const keplrOfflineSigner = window.getOfflineSigner(chainId);
-    const accounts = await keplrOfflineSigner.getAccounts();
-    const myAddress = accounts[0].address;
+// 	return {
+// 		subscribe,
+// 		connect: async () => {
+// 			console.log("connect to keplr");
+// 			const keplr = await connectKeplr(SI_CHAIN, P_LCD_REST);
+// 			set(keplr);
+// 		},
+// 	};
+// }
 
-    // @ts-ignore
-    const { signature } = await window.keplr.signAmino(
-        chainId,
-        myAddress,
-        {
-            chain_id: chainId,
-            account_number: "0",
-            sequence: "0",
-            fee: {
-                amount: [{ denom: "uscrt", amount: "0" }],
-                gas: "1",
-            },
-            msgs: [
-                {
-                    type: "query_permit",
-                    value: {
-                        permit_name: permitName,
-                        allowed_tokens: [CONTRACT],
-                        permissions: ["owner"],
-                    },
-                },
-            ],
-            memo: "",
-        },
-        {
-            preferNoSetFee: true,
-            preferNoSetMemo: true,
-        }
-    );
-    return signature;
-}
+// async function checkKeplr(chainId: string) {
+// 	let keplrEnabled = false;
+// 	const keplrCheckPromise = new Promise<void> ( (resolve, reject) => {
+// 		const keplrCheckInterval = setInterval(async () => {
+// 			let isKeplrWallet = !!window.keplr && !!window.getOfflineSigner && !!window.getEnigmaUtils;
+// 			if (isKeplrWallet) {
+// 				keplrEnabled = true;
+// 				clearInterval(keplrCheckInterval);
 
-export const keplrStore = createKeplrStore();
+// 				if (chainId === 'supernova-2' || chainId === 'supernova-1') {
+// 					await suggestChain(chainId);
+// 				}
+// 				resolve();
+// 			}
+// 		}, 1000);
+// 	});
+// 	await keplrCheckPromise;
+// 	return keplrEnabled;
+// }
 
-export async function holdForKeplr(keplr: KeplrStore) {
-    if (keplr && keplr.scrtAuthorized) { return keplr; }
-    while (true) {
-        keplr = get(keplrStore);
-        if (keplr.scrtAuthorized) {
-            return keplr;
-        }
-        await new Promise(resolve => setTimeout(resolve, 500));
-    }
-}
+// async function connectKeplr(chainId: string, secretLcd: string) {
+// 	let keplrEnabled = await checkKeplr(chainId);
+// 	let scrtAuthorized = false;
+// 	let scrtClient: SigningCosmWasmClient | null = null;
+// 	try {
+// 		// @ts-ignore
+// 		await window.keplr.enable(chainId);
+// 		// @ts-ignore
+// 		const offlineSigner = window.getOfflineSigner(chainId);
+// 		// @ts-ignore
+// 		const enigmaUtils = window.getEnigmaUtils(chainId);
+// 		const accounts = await offlineSigner.getAccounts();
+// 		const cosmJS = new SigningCosmWasmClient(
+// 			secretLcd,
+// 			accounts[0].address,
+// 			// @ts-ignore
+// 			offlineSigner,
+// 			enigmaUtils,
+// 			{
+// 				exec: {
+// 					amount: [{ amount: "62500", denom: "uscrt" }],
+// 					gas: "250000",
+// 				},
+// 			}
+// 		);
+// 		scrtAuthorized = true;
+// 		scrtClient = cosmJS;
+// 	} catch (error) {
+// 		scrtAuthorized = false;
+// 		scrtClient = null;
+// 	}
+// 	let keplr: KeplrStore = {
+// 		keplrEnabled,
+// 		scrtAuthorized,
+// 		scrtClient,
+// 	};
+// 	return keplr;
+// }
+
+// export async function getSignature(chainId: string): Promise<StdSignature> {
+// 	// @ts-ignore
+// 	const keplrOfflineSigner = window.getOfflineSigner(chainId);
+// 	const accounts = await keplrOfflineSigner.getAccounts();
+// 	const myAddress = accounts[0].address;
+
+// 	// @ts-ignore
+// 	const { signature } = await window.keplr.signAmino(
+// 		chainId,
+// 		myAddress,
+// 		{
+// 			chain_id: chainId,
+// 			account_number: "0",
+// 			sequence: "0",
+// 			fee: {
+// 				amount: [{ denom: "uscrt", amount: "0" }],
+// 				gas: "1",
+// 			},
+// 			msgs: [
+// 				{
+// 					type: "query_permit",
+// 					value: {
+// 						permit_name: permitName,
+// 						allowed_tokens: [CONTRACT],
+// 						permissions: ["owner"],
+// 					},
+// 				},
+// 			],
+// 			memo: "",
+// 		},
+// 		{
+// 			preferNoSetFee: true,
+// 			preferNoSetMemo: true,
+// 		}
+// 	);
+// 	return signature;
+// }
+
+// export const keplrStore = createKeplrStore();
+
+// export async function holdForKeplr(keplr: KeplrStore) {
+// 	if (keplr && keplr.scrtAuthorized) { return keplr; }
+// 	while (true) {
+// 		keplr = get(keplrStore);
+// 		if (keplr.scrtAuthorized) {
+// 			return keplr;
+// 		}
+// 		await timeout(500);
+// 	}
+// }
 

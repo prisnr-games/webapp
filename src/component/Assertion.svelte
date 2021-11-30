@@ -1,6 +1,7 @@
 <script context="module" lang="ts">
 	export interface AssertionHelper {
 		show(): Promise<void>;
+		hide(): void;
 	}
 </script>
 
@@ -20,8 +21,9 @@
 	import { qsa } from '#/util/dom';
 import { timeout } from '#/util/belt';
 
-	export let k_tx = {
+	export const k_tx = {
 		show,
+		hide,
 	} as AssertionHelper;
 
 	const dispatch = createEventDispatcher();
@@ -30,6 +32,10 @@ import { timeout } from '#/util/belt';
 
 	async function show(): Promise<void> {
 		b_visible = true;
+	}
+
+	function hide(): void {
+		b_visible = false;
 	}
 
 	function select_basis(d_event: Event): void {

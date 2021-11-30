@@ -13,11 +13,12 @@
 		reveal_text(s_reveal: string, xt_interval?: number, xt_pause?: number): Promise<void>;
 		commit(): Promise<void>;
 		receive(g_msg: ReceivedMessage): Promise<void>;
-		arbiter(z_text: string | string[], widgets?: Widgets): Promise<void>;
-		opponent(a_text: string[]): Promise<void>;
+		arbiter(z_text: string | string[], h_widgets?: Widgets): Promise<void>;
+		opponent(a_text: string[], h_widgets?: Widgets): Promise<void>;
 		error(s_text: string, b_fatal?: boolean): Promise<void>;
 		wallet(g_addr: AddrInfo): void;
 		submittable(fk_submit: VoidFunction | null): void;
+		unsubmittable(): void;
 	}
 
 	export interface ReceivedMessage {
@@ -91,6 +92,7 @@
 		error,
 		wallet,
 		submittable,
+		unsubmittable,
 	};
 
 	/**
@@ -313,11 +315,12 @@
 		});
 	}
 
-	async function opponent(a_text: string[]): Promise<void> {
+	async function opponent(a_text: string[], h_widgets?: Widgets): Promise<void> {
 		return await receive({
 			from: 'Opponent',
 			classes: ['from-opponent'],
 			text: a_text,
+			widgets: h_widgets || {},
 		});
 	}
 
@@ -371,6 +374,11 @@
 	function submittable(_fk_submit: VoidFunction | null): void {
 		b_submit_display = true;
 		fk_submit = _fk_submit;
+	}
+
+	function unsubmittable(): void {
+		b_submit_display = false;
+		fk_submit = null;
 	}
 
 	onMount(() => {
@@ -505,6 +513,7 @@
 			padding-left: 22px;
 			margin-top: 8px;
 			line-height: 16px;
+			position: relative;
 		}
 
 		:global(.line-commit svg) {

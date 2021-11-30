@@ -46,6 +46,8 @@ export const H_COLORS: Record<string, Color> = {
 	},
 };
 
+export const A_COLORS = Object.keys(H_COLORS);
+
 export type CanonicalColor = keyof typeof H_COLORS;
 
 export const H_SHAPES: Record<string, Shape> = {
@@ -70,5 +72,7 @@ export const H_SHAPES: Record<string, Shape> = {
 		},
 	},
 };
+
+export const A_SHAPES = Object.keys(H_SHAPES);
 
 export type CanonicalShape = keyof typeof H_SHAPES;

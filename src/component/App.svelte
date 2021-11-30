@@ -57,6 +57,7 @@ dd,
 
 	import {
 		microtask,
+		ode,
 		oder, timeout,
 	} from '#/util/belt';
 
@@ -67,6 +68,8 @@ dd,
 	
 	import {permitName, permitsStore, Permit, PermitParams, Permits } from '#/network/permits';
 	import { CONTRACT } from '#/network/contract';
+import { Deduction } from '#/util/logic';
+import PremiseWidget from './PremiseWidget.svelte';
 
 	const XT_SECONDS = 1000;
 	const XTL_MINUTES = 60 * XT_SECONDS;
@@ -369,7 +372,7 @@ dd,
 		`);
 
 		// beat
-		await timeout(s_last_seen? 800: 4600);
+		await timeout(s_last_seen? 800: 4.6e3);
 
 		// ask if ready to join
 		await k_panel.reveal_text('ready to play?');
@@ -394,7 +397,7 @@ dd,
 		// animate chip
 		await k_scene.animate_chip_entry(si_player_color, si_player_shape);
 
-		await timeout(4500);
+		await timeout(4.5e3);
 
 		let b_hint_color = si_hint.startsWith('color:');
 
@@ -404,7 +407,7 @@ dd,
 			I've also given your opponent a hint. Theirs is that nobody has a certain ${b_hint_color? 'shape': 'color'}.
 		`);
 
-		await timeout(4100);
+		await timeout(4.1e3);
 
 		const xt_eta = Date.now() + (10 * XTL_MINUTES);
 		const yw_time = writable('10m 00s');
@@ -416,30 +419,84 @@ dd,
 			yw_time.set(`${n_mins}m ${(''+(n_secs % 60)).padStart(2, '0')}s`)
 		}, 100);
 
-		// render clock icon
-		const dm_clock = document.createElement('span');
-		new Fa({
-			target: dm_clock,
-			props: {
-				icon: faClock,
-			},
-		});
+		// round 1
+		{
+			// render clock icon
+			const dm_clock = dd('span');
 
-		// final instructions
-		await k_panel.arbiter([
-			'Now you must choose what to tell the other player. You have {clock_icon}{time_remaining} remaining.',
-		], {
-			clock_icon: dm_clock.childNodes[0] as HTMLElement,
-			time_remaining: yw_time,
-		});
+			Object.assign(dm_clock.style, {
+				paddingRight: '2px',
+			});
 
-		// show transmission controls
-		await k_tx.show();
+			new Fa({
+				target: dm_clock,
+				props: {
+					icon: faClock,
+				},
+			});
 
-		await timeout(4000);
+			// final instructions
+			await k_panel.arbiter([
+				'Now you must choose what to tell the other player. I reveal both of your messages simultaneously once they both have been submitted. You have {clock_icon}{time_remaining} remaining.',
+			], {
+				clock_icon: dm_clock,
+				time_remaining: yw_time,
+			});
 
-		// reveal transmission buttons
-		reveal_tx();
+			// show transmission controls
+			await k_tx.show();
+
+			await timeout(4e3);
+
+			// reveal transmission buttons
+			reveal_tx();
+		}
+
+		// emulate opponent message
+		{
+			await timeout(3e3);
+
+			// create a priori deduction
+			const k_priori = new Deduction();
+			k_priori.nobody(`color:${si_player_color}`);
+			k_priori.nobody(`shape:${si_player_shape}`);
+			k_priori.nobody(si_hint);
+
+			// prepare opp1 deduction
+			let k_opp1 = k_priori.clone();
+
+			// premise dom
+			const dm_premise = dd('span');
+
+			// render premise wiidget
+			const yc_premise = new PremiseWidget({
+				target: dm_premise,
+				props: {
+					b_mode_nobody: false,
+					si_assertion: 'shape:star',
+				},
+			});
+
+			// premise helper
+			const k_premise = yc_premise.k_premise;
+
+			// listen for change to premise
+			yc_premise.$on('change', () => {
+				k_opp1 = k_premise.apply(k_priori.clone());
+
+				console.log(`Priori: ${k_priori.explain()}`);
+				console.log(`Opp1: ${k_opp1.explain()}`);
+				// debugger;
+				// console.log([k_priori, k_opp1]);
+			});
+
+
+			k_panel.opponent([
+				'Nobody has a star {premise}'
+			], {
+				premise: dm_premise,
+			});
+		}
 	});
 
 	let si_basis = 'nobody has';
@@ -464,24 +521,29 @@ dd,
 		reveal_tx();
 	}
 
-	async function select_color(g_evt: CustomEvent<CanonicalColor | CanonicalShape>) {
-		s_quality = g_evt.detail;
+	async function select_quality(s_type: 'color' | 'shape', _s_quality: string) {
+		s_quality = _s_quality;
 
 		await reveal_tx();
 
 		k_panel.submittable(() => {
-			debugger;
+			// hide transmission controls
+			k_tx.hide();
+
+			// remove submission button
+			k_panel.unsubmittable();
+
+			// commit text to message history
+			k_panel.commit();
 		});
 	}
 
+	async function select_color(g_evt: CustomEvent<CanonicalColor | CanonicalShape>) {
+		select_quality('color', g_evt.detail);
+	}
+
 	async function select_shape(g_evt: CustomEvent<CanonicalColor | CanonicalShape>) {
-		s_quality = `a ${g_evt.detail}`;
-
-		await reveal_tx();
-
-		k_panel.submittable(() => {
-			debugger;
-		});
+		select_quality('shape', `a ${g_evt.detail}`);
 	}
 
 </script>

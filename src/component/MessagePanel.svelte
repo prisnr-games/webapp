@@ -1,5 +1,6 @@
 <script context="module" lang="ts">
 	import type { Writable } from 'svelte/store';
+	import type { PermitParams } from '#/network/encrypted-ls';
 
 	export type Widgets = Record<string, Writable<string> | HTMLElement>;
 
@@ -20,6 +21,7 @@
 		error(z_text: TextInput, b_fatal?: boolean): Promise<void>;
 		warn(z_text: TextInput): Promise<void>;
 		wallet(g_addr: AddrInfo): void;
+		permit(g_params: PermitParams): void;
 		submittable(fk_submit: VoidFunction | null, s_tag?: string): void;
 		unsubmittable(): void;
 	}
@@ -53,6 +55,8 @@
 	import {
 		faUser,
 		faWallet,
+		faFilePowerpoint,
+		faTicketAlt,
 	} from '@fortawesome/free-solid-svg-icons';
 	
 	import {
@@ -96,6 +100,7 @@
 		error,
 		warn,
 		wallet,
+		permit,
 		submittable,
 		unsubmittable,
 	};
@@ -374,6 +379,13 @@
 		}
 	}
 
+	let s_permit_display: string = '';
+	function permit(g_permit: PermitParams): void {
+		const p_token = g_permit.allowed_tokens[0];
+
+		s_permit_display = 'signed: '+p_token.slice(0, 'secret12345'.length)+'...'+p_token.slice(-5);
+	}
+
 	let dt_attempt_last = 0;
 	async function attempt_type() {
 		debugger;
@@ -567,6 +579,10 @@
 			font-size: 12px;
 		}
 
+		.msg-nav-permit {
+			font-size: 12px;
+		}
+
 		.msg-nav-icon {
 			opacity: 0.7;
 			font-size: 16px;
@@ -744,6 +760,12 @@
 				<span class="msg-nav-icon"><Fa icon={faWallet}/></span>
 				<span class="msg-nav-addr">{s_nav_addr}</span>
 			</span>
+			{#if s_permit_display}
+				<span class="msg-nav-group" transition:fade={{duration:1000}}>
+					<span class="msg-nav-icon"><Fa icon={faTicketAlt}/></span>
+					<span class="msg-nav-permit">{s_permit_display}</span>
+				</span>
+			{/if}
 		</div>
 	{/if}
 	{#if b_submit_display}

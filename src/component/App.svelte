@@ -97,7 +97,12 @@
 	
 	import {permitName, permitsStore, Permit, PermitParams, Permits } from '#/network/permits';
 	import { CONTRACT, P_CONTRACT_ADDR } from '#/network/contract';
-import { EncryptedLS, SI_PERMIT } from '#/network/encrypted-ls';
+
+	import {
+		SI_PERMIT,
+		EncryptedLocalStorage,
+		EncryptedLS,
+	} from '#/network/encrypted-ls';
 
 	const XT_SECONDS = 1000;
 	const XTL_MINUTES = 60 * XT_SECONDS;
@@ -306,9 +311,8 @@ import { EncryptedLS, SI_PERMIT } from '#/network/encrypted-ls';
 		// get passphrase
 		const s_passphrase = await enter_passphrase();
 
-		// combine
-		const k_ls = new EncryptedLS([p_fingerprint, s_passphrase, 'salt'].join('|'));
-
+		// clear text
+		k_panel.reveal_text('');
 
 		// prepare for wallet connection
 		await k_panel.warn(`
@@ -431,16 +435,38 @@ import { EncryptedLS, SI_PERMIT } from '#/network/encrypted-ls';
 			ledger: g_key.isNanoLedger,
 		});
 
-		const h_permits = k_ls.get('permits') as Record<string, Permit> | null;
+		// local storage
+		const k_ls = new EncryptedLocalStorage(p_signer, [p_fingerprint, s_passphrase, 'salt'].join('|'));
 
-		if(h_permits && h_permits[p_signer]) {
-			g_permit = h_permits[p_signer];
+		let h_permits: Record<string, Permit> | null = null;
+		try {
+			h_permits = k_ls.get<Record<string, Permit>>('permits');
 		}
+		catch(e_decrypt: unknown) {
+			k_panel.warn('Change in passphrase detected. Clearing old query perrmits.');
+			k_ls.clear();
+		}
+
+		await timeout(1000);
+
+		// permit exists for this contract
+		if(h_permits && h_permits[P_CONTRACT_ADDR]) {
+			g_permit = h_permits[P_CONTRACT_ADDR];
+		}
+		// permit does not exist for this contract
 		else {
 			// 
-			await k_panel.reveal_text(`create a query permit`);
+			await k_panel.warn(`
+				Query permits allow you to read encrypted data from the blockchain without needing to write anything extra to the chain.
 
-			await k_prompt.ok('Create permit');
+				Signing a query permit happens offline and does not require any gas.
+			`);
+
+			await timeout(600);
+
+			await k_panel.reveal_text('ready to sign?');
+
+			await k_prompt.ok('Sign permit');
 			
 			try {
 				// build permit
@@ -457,13 +483,15 @@ import { EncryptedLS, SI_PERMIT } from '#/network/encrypted-ls';
 				// append
 				k_ls.set('permits', {
 					...(h_permits || {}),
-					[p_signer]: g_permit,
+					[P_CONTRACT_ADDR]: g_permit,
 				});
 			}
 			catch(e_sign_set: any) {
 				return fatal(e_sign_set.stack);
 			}
 		}
+
+		k_panel.permit(g_permit.params);
 
 		await timeout(1200);
 

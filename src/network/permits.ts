@@ -8,6 +8,7 @@ import fingerprintjs from '@fingerprintjs/fingerprintjs';
 import type {
 	lib as CryptoJS_lib,
 } from 'crypto-js';
+import type { JsonObject } from 'secretjs/types/types';
 
 type CipherParams = CryptoJS_lib.CipherParams;
 type WordArray = CryptoJS_lib.WordArray;
@@ -35,7 +36,7 @@ export interface PermitParams {
 	permissions: string[],
 }
 
-export interface Permit {
+export interface Permit extends JsonObject {
 	params: PermitParams,
 	signature: Signature,
 }

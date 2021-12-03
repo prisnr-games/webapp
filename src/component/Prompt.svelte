@@ -114,6 +114,9 @@ import { microtask, oderac } from '#/util/belt';
 </script>
 
 <style lang="less">
+	@user-color: #bfbfff;
+	@ease-in-out-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
 	.prompt {
 		display: flex;
 		justify-content: center;
@@ -137,7 +140,7 @@ import { microtask, oderac } from '#/util/belt';
 			// border-color: rgb(120,0,190);
 			border-color: rgb(30,30,250);
 			background: rgb(210, 0, 255);
-			background: linear-gradient(45deg, rgba(0, 46, 208) 0%, rgba(159, 198, 251, 0.7) 100%);;
+			background: linear-gradient(45deg, rgba(0, 46, 208) 0%, rgba(159, 198, 251, 0.7) 100%);
 			// background: linear-gradient(45deg, rgba(0, 46, 208, 1) 0%, rgba(255,255,255,0) 100%)
 			// background: linear-gradient(32deg, rgb(210, 0, 255) 0%, rgb(0, 0, 0) 80%);
 		}

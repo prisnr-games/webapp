@@ -6,12 +6,15 @@ import {
 import type {
 	CanonicalColor,
 	CanonicalShape,
+	CanonicalBasis,
 } from '#/intl/game';
 
 export type SemanticColorQuality = `color:${CanonicalColor}`;
 export type SemanticShapeQuality = `shape:${CanonicalShape}`;
 
 export type SemanticQuality = SemanticColorQuality | SemanticShapeQuality;
+
+export type SemanticAssertion = `${CanonicalBasis}|${SemanticQuality}`;
 
 // export type QualityMask = number & {}
 
@@ -36,16 +39,22 @@ function render_known(xm_known: number): string {
 }
 
 function mask_from_semantic(si_semantic: SemanticQuality, b_complement=false): number {
-	const [si_quality, s_value] = si_semantic.split(/:/);
+	const [si_quality, s_value] = si_semantic.split(':');
 
-	if ('color' === si_quality) {
-		const i_color = A_COLORS.indexOf(s_value);
+	if('color' === si_quality) {
+		const i_color = A_COLORS.indexOf(s_value as CanonicalColor);
 		return (1 << (7 - i_color)) | (b_complement? 0xff: 0);
 	}
 	else {
-		const i_shape = A_SHAPES.indexOf(s_value);
+		const i_shape = A_SHAPES.indexOf(s_value as CanonicalShape);
 		return (1 << (3 - i_shape)) | (b_complement? 0xff00: 0);
 	}
+}
+
+export function use_quality_in_sentence(si_semantic: SemanticQuality): string {
+	const [si_quality, s_value] = si_semantic.split(':');
+
+	return `${'shape' === si_quality? 'a ': ''}${s_value}`;
 }
 
 export class Deduction {

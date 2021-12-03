@@ -15,6 +15,14 @@
 		writable,
 	} from 'svelte/store';
 
+	import {
+		blur,
+	} from 'svelte/transition';
+
+	import {
+		quadInOut,
+	} from 'svelte/easing';
+
 	import Fa from 'svelte-fa';
 
 	import {
@@ -28,6 +36,9 @@
 		H_SHAPES,
 		CanonicalColor,
 		CanonicalShape,
+A_BASES,
+CanonicalBasis,
+H_BASES,
 	} from '#/intl/game';
 
 	import {
@@ -50,7 +61,7 @@
 	} from '#/network/keplr';
 
 	import {
-dd,
+		dd,
 		read_cookie,
 		write_cookie,
 	} from '#/util/dom';
@@ -58,18 +69,30 @@ dd,
 	import {
 		microtask,
 		ode,
-		oder, timeout,
+		oder,
+		proper,
+		timeout,
 	} from '#/util/belt';
+
+	import {
+		Deduction,
+		use_quality_in_sentence,
+	} from '#/util/logic';
+	
+	import type {
+		SemanticColorQuality,
+		SemanticQuality,
+		SemanticShapeQuality,
+	} from '#/util/logic';
 
 	import MessagePanel, {MessagePanelHelper} from './MessagePanel.svelte';
 	import Prompt, {PromptHelper} from './Prompt.svelte';
 	import Assertion, {AssertionHelper} from './Assertion.svelte';
 	import Scene, {SceneHelper} from './Scene.svelte';
+	import PremiseWidget, {PremiseHelper} from './PremiseWidget.svelte';
 	
 	import {permitName, permitsStore, Permit, PermitParams, Permits } from '#/network/permits';
 	import { CONTRACT } from '#/network/contract';
-import { Deduction } from '#/util/logic';
-import PremiseWidget from './PremiseWidget.svelte';
 
 	const XT_SECONDS = 1000;
 	const XTL_MINUTES = 60 * XT_SECONDS;
@@ -180,7 +203,7 @@ import PremiseWidget from './PremiseWidget.svelte';
 
 	let si_player_color: CanonicalColor;
 	let si_player_shape: CanonicalShape;
-	let si_hint: `color:${CanonicalColor}` | `shape:${CanonicalShape}`;
+	let si_player_hint: SemanticQuality;
 
 	async function introduction(): Promise<void> {
 		// take a beat to apreciate the blank, dark page
@@ -201,7 +224,7 @@ import PremiseWidget from './PremiseWidget.svelte';
 
 	async function welcome_back(): Promise<void> {
 		// welcome back message
-		await k_panel.reveal_text(`let's do this ;)`);
+		await k_panel.reveal_text(`good luck! ;)`);
 
 		// beat
 		await timeout(800);
@@ -380,12 +403,12 @@ import PremiseWidget from './PremiseWidget.svelte';
 		// connect wallet
 		await connect_wallet();
 
-		si_player_color = Object.keys(H_COLORS)[Math.floor(Math.random() * 4)];
-		si_player_shape = Object.keys(H_SHAPES)[Math.floor(Math.random() * 4)];
+		si_player_color = Object.keys(H_COLORS)[Math.floor(Math.random() * 4)] as CanonicalColor;
+		si_player_shape = Object.keys(H_SHAPES)[Math.floor(Math.random() * 4)] as CanonicalShape;
 
-		si_hint = [
-			...Object.keys(H_COLORS).map(s => `color:${s}` as `color:${CanonicalColor}`),
-			...Object.keys(H_SHAPES).map(s => `shape:${s}` as `shape:${CanonicalShape}`),
+		si_player_hint = [
+			...Object.keys(H_COLORS).map(s => `color:${s}` as SemanticColorQuality),
+			...Object.keys(H_SHAPES).map(s => `shape:${s}` as SemanticShapeQuality),
 		][Math.floor(Math.random() * 4)];
 
 		// clear
@@ -397,12 +420,12 @@ import PremiseWidget from './PremiseWidget.svelte';
 		// animate chip
 		await k_scene.animate_chip_entry(si_player_color, si_player_shape);
 
-		await timeout(4.5e3);
+		await timeout(5e3);
 
-		let b_hint_color = si_hint.startsWith('color:');
+		let b_hint_color = si_player_hint.startsWith('color:');
 
 		await k_panel.arbiter(`
-			Round 1: I've given you the ${si_player_color} ${si_player_shape} this round, and a hint that nobody has ${b_hint_color? '': 'a '}${si_hint.replace(/^[^:]+:/, '')}.
+			Round 1: I've given you the ${si_player_color} ${si_player_shape} this round, and a hint that nobody has ${b_hint_color? '': 'a '}${si_player_hint.replace(/^[^:]+:/, '')}.
 
 			I've also given your opponent a hint. Theirs is that nobody has a certain ${b_hint_color? 'shape': 'color'}.
 		`);
@@ -414,7 +437,7 @@ import PremiseWidget from './PremiseWidget.svelte';
 
 		setInterval(() => {
 			const xtl_diff = xt_eta - Date.now();
-			const n_secs = Math.floor(xtl_diff / XT_SECONDS);
+			const n_secs = Math.max(0, Math.floor(xtl_diff / XT_SECONDS));
 			const n_mins = Math.floor(n_secs / 60);
 			yw_time.set(`${n_mins}m ${(''+(n_secs % 60)).padStart(2, '0')}s`)
 		}, 100);
@@ -437,7 +460,7 @@ import PremiseWidget from './PremiseWidget.svelte';
 
 			// final instructions
 			await k_panel.arbiter([
-				'Now you must choose what to tell the other player. I reveal both of your messages simultaneously once they both have been submitted. You have {clock_icon}{time_remaining} remaining.',
+				'Now you must choose what to tell the other player. I will reveal both of your messages simultaneously once they both have been submitted. You have {clock_icon}{time_remaining} remaining.',
 			], {
 				clock_icon: dm_clock,
 				time_remaining: yw_time,
@@ -460,7 +483,7 @@ import PremiseWidget from './PremiseWidget.svelte';
 			const k_priori = new Deduction();
 			k_priori.nobody(`color:${si_player_color}`);
 			k_priori.nobody(`shape:${si_player_shape}`);
-			k_priori.nobody(si_hint);
+			k_priori.nobody(si_player_hint);
 
 			// prepare opp1 deduction
 			let k_opp1 = k_priori.clone();
@@ -499,30 +522,57 @@ import PremiseWidget from './PremiseWidget.svelte';
 		}
 	});
 
-	let si_basis = 'nobody has';
-	let s_quality = '';
+	let si_assert_basis: CanonicalBasis = A_BASES[0];
+	let si_assert_quality: SemanticQuality | '' = '';
 
 	async function reveal_tx(): Promise<void> {
-		await k_panel.reveal_text(`${si_basis} ${s_quality || '...'}`);
+		const s_what = si_assert_quality? use_quality_in_sentence(si_assert_quality): '';
+
+		const s_reveal = H_BASES[si_assert_basis].describe[s_lang](s_what);
+
+		await k_panel.reveal_text(s_reveal);
 	}
 
-	function select_basis(g_evt: CustomEvent<'nobody' | 'chip'>) {
+	function select_basis(g_evt: CustomEvent<CanonicalBasis>) {
 		k_panel.submittable(null);
 
-		if('nobody' === g_evt.detail) {
-			si_basis = 'nobody has';
-		}
-		else {
-			si_basis = 'my chip is';
-		}
+		si_assert_basis = g_evt.detail;
 
-		s_quality = '';
+		si_assert_quality = '';
 
 		reveal_tx();
 	}
 
-	async function select_quality(s_type: 'color' | 'shape', _s_quality: string) {
-		s_quality = _s_quality;
+	async function select_quality(g_evt: CustomEvent<SemanticQuality>) {
+		k_panel.submittable(null);
+
+		si_assert_quality = g_evt.detail;
+
+		const [si_attr, s_value] = si_assert_quality.split(':');
+
+		let s_tag = 'Unknowable';
+		if('nobody' === si_assert_basis) {
+			if(si_player_hint === si_assert_quality) {
+				s_tag = 'Truth';
+			}
+			else {
+				if(('color' === si_attr && s_value === si_player_color)
+					|| ('shape' === si_attr && s_value === si_player_shape)
+				) {
+					s_tag = 'Lie';
+				}
+			}
+		}
+		else {
+			if(('color' === si_attr && s_value === si_player_color)
+				|| ('shape' === si_attr && s_value === si_player_shape)
+			) {
+				s_tag = 'Truth';
+			}
+			else {
+				s_tag = 'Lie';
+			}
+		}
 
 		await reveal_tx();
 
@@ -535,17 +585,8 @@ import PremiseWidget from './PremiseWidget.svelte';
 
 			// commit text to message history
 			k_panel.commit();
-		});
+		}, s_tag);
 	}
-
-	async function select_color(g_evt: CustomEvent<CanonicalColor | CanonicalShape>) {
-		select_quality('color', g_evt.detail);
-	}
-
-	async function select_shape(g_evt: CustomEvent<CanonicalColor | CanonicalShape>) {
-		select_quality('shape', `a ${g_evt.detail}`);
-	}
-
 </script>
 
 <style lang="less">
@@ -553,6 +594,32 @@ import PremiseWidget from './PremiseWidget.svelte';
 		position: relative;
 	}
 
+	.mine {
+		position: absolute;
+		width: 400px;
+		text-align: center;
+		background-color: fade(white, 5%);
+		padding: 7px 22px;
+		font-family: 'Roboto Mono';
+		border-radius: 5px;
+		left: calc(50% - 200px);
+		box-sizing: border-box;
+		top: 105px;
+		color: white;
+		font-size: 15px;
+
+		.chip {
+			font-size: 1.6em;
+			transform: scaleY(0.85);
+			letter-spacing: -2.5px;
+		}
+
+		.hint {
+			.hint-prefix {
+				color: fade(white, 90%);
+			}
+		}
+	}
 </style>
 
 <MessagePanel bind:k_panel>
@@ -564,9 +631,23 @@ import PremiseWidget from './PremiseWidget.svelte';
 
 	</Prompt>
 
-	<Assertion bind:k_tx on:basis={select_basis} on:color={select_color} on:shape={select_shape}>
+	<Assertion bind:k_tx on:basis={select_basis} on:quality={select_quality}>
 
 	</Assertion>
+
+	{#if si_player_hint}
+		<div class="mine" transition:blur={{duration:2.4e3, easing:quadInOut, delay: 4.5e3}}>
+			<div class="chip">
+				The {proper(si_player_color)} {proper(si_player_shape)}
+			</div>
+			<div class="hint">
+				<span class="hint-prefix">Hint:</span>
+				<span class="hint-sentence">
+					Nobody has {use_quality_in_sentence(si_player_hint)}
+				</span>
+			</div>
+		</div>
+	{/if}
 
 	<Scene bind:k_scene>
 

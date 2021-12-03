@@ -7,6 +7,7 @@
 
 <script lang="ts">
 	import {
+		getContext,
 		createEventDispatcher,
 	} from 'svelte';
 
@@ -18,8 +19,31 @@
 		circOut, expoOut, quadInOut, sineOut,
 	} from 'svelte/easing';
 
-	import { qsa } from '#/util/dom';
-import { timeout } from '#/util/belt';
+	import {
+		proper,
+	} from '#/util/belt';
+
+	import {
+		qsa,
+	} from '#/util/dom';
+
+	import type {
+		SemanticQuality,
+	} from '#/util/logic';
+
+	import {
+		A_BASES,
+		A_COLORS,
+		A_SHAPES,
+		CanonicalBasis,
+		H_BASES,
+		H_COLORS,
+		H_SHAPES,
+	} from '#/intl/game';
+
+	import type {
+		GameContext,
+	} from './App.svelte';
 
 	export const k_tx = {
 		show,
@@ -27,6 +51,10 @@ import { timeout } from '#/util/belt';
 	} as AssertionHelper;
 
 	const dispatch = createEventDispatcher();
+
+	const g_game = (getContext('game') as GameContext);
+
+	let yw_lang = g_game.language;
 
 	let b_visible = false;
 
@@ -38,29 +66,48 @@ import { timeout } from '#/util/belt';
 		b_visible = false;
 	}
 
+	let si_basis_active: CanonicalBasis = A_BASES[0];
+	let si_quality: SemanticQuality | null = null;
+
+	const data = (d_target: EventTarget, si_key: string) => (d_target as HTMLElement).closest(`[data-${si_key}]`)!.getAttribute(`data-${si_key}`)!;
+
 	function select_basis(d_event: Event): void {
-		qsa(document.body, '.tx-basis .active').forEach(d => d.classList.remove('active'));
-		const dm_basis = (d_event.target as HTMLElement);
-		dm_basis.classList.add('active');
-		dispatch('basis', dm_basis.getAttribute('data-basis'));
+		si_basis_active = data(d_event.target!, 'basis') as CanonicalBasis;
+		dispatch('basis', si_basis_active);
 	}
 
-	function select_color(d_event: Event): void {
-		qsa(document.body, '.diamond .active').forEach(d => d.classList.remove('active'));
-		const dm_color = (d_event.target as HTMLElement).closest('button') as HTMLElement;
-		dm_color.classList.add('active');
-		dispatch('color', dm_color.getAttribute('data-color'));
+	function select_quality(d_event: Event): void {
+		si_quality = data(d_event.target!, 'quality') as SemanticQuality;
+		dispatch('quality', si_quality);
 	}
 
-	function select_shape(d_event: Event): void {
-		qsa(document.body, '.diamond .active').forEach(d => d.classList.remove('active'));
-		const dm_shape = (d_event.target as HTMLElement).closest('button') as HTMLElement;
-		dm_shape.classList.add('active');
-		dispatch('shape', dm_shape.getAttribute('data-shape'));
-	}
+	const A_DIAMOND_KEYS = [
+		[
+			{
+				key: 0,
+				pos: 'top',
+			},
+			{
+				key: 2,
+				pos: 'rgt',
+			},
+		],
+		[
+			{
+				key: 1,
+				pos: 'lft',
+			},
+			{
+				key: 3,
+				pos: 'btm',
+			},
+		],
+	];
+	
 </script>
 
 <style lang="less">
+	@user-color: #bfbfff;
 
 	.tx-basis {
 		margin-top: 16px;
@@ -69,11 +116,11 @@ import { timeout } from '#/util/belt';
 		left: calc(50% - 223px);
 
 		color: white;
-		background-color: #0a0a0a;
 
 		.tab-wrap {
-			border: 2px solid rgba(255, 255, 255, 0.6);
+			border: 2px solid rgba(255, 255, 255, 0.2);
 			border-radius: 44px;
+			background-color: #0a0a0a;
 			
 			display: flex;
 			overflow: hidden;
@@ -96,11 +143,14 @@ import { timeout } from '#/util/belt';
 				
 				&.active {
 					color: white;
-					border-color: rgb(120,0,190);
+					border-color: saturate(darken(spin(@user-color, 20), 20%), 100%);
+					// border-color: rgb(120,0,190);
 					// background: linear-gradient(45deg, rgba(0, 46, 208) 0%, rgb(159, 198, 251) 100%);;
 					// background: linear-gradient(45deg, rgba(0, 46, 208, 1) 0%, rgba(255,255,255,0) 100%)
-					background: rgb(210, 0, 255);
-					background: linear-gradient(32deg, rgb(210, 0, 255) 0%, rgb(0, 0, 0) 80%);
+					background: @user-color;
+					// background: rgb(210, 0, 255);
+					background: linear-gradient(32deg, darken(saturate(@user-color, 100%), 10%) 0%, rgb(0, 0, 0) 80%);
+					// background: linear-gradient(32deg, rgb(210, 0, 255) 0%, rgb(0, 0, 0) 80%);
 				}
 			}
 		}
@@ -117,11 +167,6 @@ import { timeout } from '#/util/belt';
 		left: calc(50% + 420px - 100px);
 		top: 80px;
 		font-size: 23px;
-	}
-
-	:global(button.active) {
-		color: gold !important;
-		font-weight: 600;
 	}
 
 	.diamond {
@@ -152,6 +197,10 @@ import { timeout } from '#/util/belt';
 				cursor: pointer;
 				transition: color 0.8s ease;
 
+				.selected {
+					color: gold !important;
+					font-weight: 600;
+				}
 
 				&:active {
 					color: rgba(255, 255, 255, 0.6);
@@ -235,50 +284,49 @@ import { timeout } from '#/util/belt';
 {#if b_visible}
 	<div class="tx-basis" transition:fade={{duration:3600, easing:quadInOut}}>
 		<span class="tab-wrap">
-			<span class="active tab" on:click={select_basis} data-basis="nobody">
-				Nobody has...
-			</span>
-			<span class="tab" on:click={select_basis} data-basis="chip">
-				My chip is...
-			</span>
+			{#each A_BASES as si_basis}
+				<span class="active tab" on:click={select_basis} data-basis="{si_basis}" class:active={si_basis === si_basis_active}>
+					{proper(H_BASES[si_basis].describe[$yw_lang](''))}
+				</span>
+			{/each}
 		</span>
 	</div>
 
 	<span class="diamond tx-colors" transition:fade={{delay:2400, duration:3200, easing:expoOut}}>
-		<span>
-			<button class="diamond-top color-red" data-color="red" on:click={select_color}>
-				<span>Red</span>
-			</button>
-			<button class="diamond-rgt color-blue" data-color="blue" on:click={select_color}>
-				<span>Blue</span>
-			</button>
-		</span>
-		<span>
-			<button class="diamond-lft color-green" data-color="green" on:click={select_color}>
-				<span>Green</span>
-			</button>
-			<button class="diamond-btm color-black" data-color="black" on:click={select_color}>
-				<span>Black</span>
-			</button>
-		</span>
+		{#each A_DIAMOND_KEYS as a_group}
+			<span>
+				{#each a_group as g_loc}
+					{#await A_COLORS[g_loc.key] then si_color}
+						<button
+							class="diamond-{g_loc.pos} color-{si_color}"
+							data-quality="color:{si_color}"
+							on:click={select_quality}
+							class:selected={`color:${si_color}` === si_quality}
+						>
+							<span>{proper(H_COLORS[si_color].labels[$yw_lang])}</span>
+						</button>
+					{/await}
+				{/each}
+			</span>
+		{/each}
 	</span>
 
 	<span class="diamond tx-shapes" transition:fade={{delay:3200, duration:3200, easing:expoOut}}>
-		<span>
-			<button class="diamond-top bg-rad-top" data-shape="triangle" on:click={select_shape}>
-				<span>▲</span>
-			</button>
-			<button class="diamond-rgt bg-rad-rgt" data-shape="circle" on:click={select_shape}>
-				<span>●</span>
-			</button>
-		</span>
-		<span>
-			<button class="diamond-lft bg-rad-lft" data-shape="square" on:click={select_shape}>
-				<span>■</span>
-			</button>
-			<button class="diamond-btm bg-rad-btm" data-shape="star" on:click={select_shape}>
-				<span>★</span>
-			</button>
-		</span>
+		{#each A_DIAMOND_KEYS as a_group}
+			<span>
+				{#each a_group as g_loc}
+					{#await A_SHAPES[g_loc.key] then si_shape}
+						<button
+							class="diamond-{g_loc.pos} bg-rad-{g_loc.pos}"
+							data-quality="shape:{si_shape}"
+							on:click={select_quality}
+							class:selected={`shape:${si_shape}` === si_quality}
+						>
+							<span>{H_SHAPES[si_shape].symbol}</span>
+						</button>
+					{/await}
+				{/each}
+			</span>
+		{/each}
 	</span>
 {/if}

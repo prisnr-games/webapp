@@ -17,7 +17,7 @@
 		opponent(a_text: string[], h_widgets?: Widgets): Promise<void>;
 		error(s_text: string, b_fatal?: boolean): Promise<void>;
 		wallet(g_addr: AddrInfo): void;
-		submittable(fk_submit: VoidFunction | null): void;
+		submittable(fk_submit: VoidFunction | null, s_tag?: string): void;
 		unsubmittable(): void;
 	}
 
@@ -38,6 +38,7 @@
 	import {
 		slide,
 		blur,
+		fade,
 	} from 'svelte/transition';
 
 	import {
@@ -106,6 +107,8 @@
 	 * cursor character
 	*/
 	let s_cursor = '❚';
+
+	let s_evaluation = '';
 
 	/**
 	 * msg text
@@ -371,8 +374,44 @@
 		}
 	}
 
-	function submittable(_fk_submit: VoidFunction | null): void {
+	let dm_eval: HTMLElement;
+	function submittable(_fk_submit: VoidFunction | null, s_tag?: string): void {
 		b_submit_display = true;
+
+		// eval dom node is bound
+		if(dm_eval) {
+			// get client rect
+			const g_rect = dm_eval.getBoundingClientRect();
+
+			// set fixed position
+			Object.assign(dm_eval.style, {
+				position: 'fixed',
+				top: `${g_rect.top}px`,
+				left: `${g_rect.left}px`,
+			});
+		}
+		
+		s_evaluation = '';
+	
+		if(s_tag) {
+			setTimeout(() => {
+				// eval node is bound and positioning is enabled; clear it
+				if(dm_eval && dm_eval.style.position) {
+					Object.assign(dm_eval.style, {
+						position: '',
+						top: '',
+						left: '',
+					});
+				}
+
+				s_evaluation = s_tag;
+			}, 500);
+
+			// setTimeout(() => {
+			// 	s_evaluation = s_tag;
+			// }, 400);
+		}
+
 		fk_submit = _fk_submit;
 	}
 
@@ -387,6 +426,26 @@
 		});
 	});
 
+
+	/**
+	 * in order to have an animation on the submit button while it is active and then play a transition
+	 * on hover, the animation must first be disabled before chrome will animate the transition property.
+	 * this is done using a combination of classes and event callbacks.
+	 */
+	let dm_submit: HTMLElement;
+
+	async function mouseenter_submit() {
+		await timeout(100);
+		dm_submit.classList.add('hover');
+	}
+
+	async function mouseleave_submit() {
+		dm_submit.style.animation = '0';
+		await timeout(100);
+		dm_submit.classList.remove('hover');
+		await timeout(1e3);
+		dm_submit.style.animation = '';
+	}
 </script>
 
 <style lang="less">
@@ -402,24 +461,36 @@
 		}
 	}
 
-	@keyframes pulse {
+	@keyframes pulse-border {
 		0% {
-			border-color: transparent;
+			border-color: fade(@user-color, 10%);
 		}
-		12% {
-			border-color: fade(@user-color, 50%);
-		}
-		24% {
-			border-color: transparent;
-		}
-		50% {
-			border-color: fade(@user-color, 75%);
-		}
-		75% {
-			border-color: transparent;
+		90% {
+			border-color: fade(@user-color, 20%);
 		}
 		100% {
-			border-color: fade(@user-color, 80%);
+			border-color: fade(@user-color, 10%);
+		}
+	}
+
+	@keyframes pulse-color {
+		0% {
+			color: white;
+		}
+		12% {
+			color: fade(@user-color, 50%);
+		}
+		24% {
+			color: white;
+		}
+		50% {
+			color: fade(@user-color, 75%);
+		}
+		75% {
+			color: white;
+		}
+		100% {
+			color: fade(@user-color, 80%);
 		}
 	}
 
@@ -500,7 +571,7 @@
 		position: relative;
 		font-size: 12px;
 		padding: 8px;
-		padding-bottom: 0;
+		padding-bottom: 2px;
 
 		display: flex;
 		justify-content: flex-end;
@@ -514,6 +585,12 @@
 			margin-top: 8px;
 			line-height: 16px;
 			position: relative;
+		}
+
+		:global(.line-commit>*) {
+			text-indent: initial;
+			padding-left: initial;
+			margin-top: initial;
 		}
 
 		:global(.line-commit svg) {
@@ -556,6 +633,7 @@
 	.msg-console {
 		.console-bg();
 		border-radius: 0 0 @console-border @console-border;
+		position: relative;
 
 		font-size: 28px;
 		padding: 6px;
@@ -566,7 +644,17 @@
 		}
 	
 		.cursor {
-			position: absolute;
+			background-color: @user-color;
+			margin-left: -1rem;
+			font-size: 22px;
+			display: inline-block;
+			transform: scaleX(0.8);
+		}
+
+		.msg-console-eval {
+			font-size: 12px;
+			color: white;
+			vertical-align: middle;
 		}
 	}
 
@@ -589,11 +677,25 @@
 		transition: color 0.5s ease-in-out;
 
 		&.active {
-			animation: pulse 2s @ease-in-out-quad 0s infinite alternate;
+			animation: pulse-border 4s linear 0s infinite;
+			transition: border-color 1s linear;
+			border-color: fade(@user-color, 15%);
 			color: white;
 
+			&>.msg-submit-icon {
+				animation: pulse-color 2s @ease-in-out-quad 0s infinite alternate;
+				margin-right: 0.25em;
+			}
+
 			&:hover {
-				text-decoration: underline;
+				:global(.msg-submit-text) {
+					text-decoration: underline;
+				}
+				animation: none;
+			}
+
+			:global(&.hover) {
+				border-color: fade(@user-color, 80%) !important;
 			}
 		}
 	}
@@ -603,7 +705,16 @@
 	<div class="msg-history" bind:this={dm_history} />
 	<div class="msg-console">
 		<span class="text">&gt;&nbsp;{s_text}</span>
-		<span class="cursor blinking" bind:this={dm_cursor}>{s_cursor}</span>
+		<span class="cursor blinking" bind:this={dm_cursor}>&nbsp;</span>
+		{#if s_evaluation}
+			<span class="msg-console-eval"
+				bind:this={dm_eval}
+				in:fade={{duration:1000}}
+				out:fade={{duration:500}}
+			>
+				{s_evaluation}
+			</span>
+		{/if}
 	</div>
 	{#if b_nav_display}
 		<div class="msg-nav" transition:slide={{duration:750, easing:quadOut}}>
@@ -618,7 +729,14 @@
 		</div>
 	{/if}
 	{#if b_submit_display}
-		<div class="msg-submit" on:click={fk_submit || (() => {})} class:active={!!fk_submit} transition:blur={{}}>
+		<div class="msg-submit"
+			on:click={fk_submit || (() => {})}
+			class:active={!!fk_submit}
+			transition:blur={{}}
+			on:mouseenter={mouseenter_submit}
+			on:mouseleave={mouseleave_submit}
+			bind:this={dm_submit}
+		>
 			<span class="msg-submit-icon"><Fa icon={faPaperPlane} /></span>
 			<span class="msg-submit-text">Submit</span>
 		</div>

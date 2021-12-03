@@ -16,10 +16,10 @@ interface Color extends Labeled {
 }
 
 interface Shape extends Labeled {
-
+	symbol: string;
 }
 
-export const H_COLORS: Record<string, Color> = {
+export const H_COLORS = {
 	red: {
 		color: '#a00000',
 		labels: {
@@ -44,35 +44,63 @@ export const H_COLORS: Record<string, Color> = {
 			en: 'black',
 		},
 	},
-};
-
-export const A_COLORS = Object.keys(H_COLORS);
+} as const;
 
 export type CanonicalColor = keyof typeof H_COLORS;
 
-export const H_SHAPES: Record<string, Shape> = {
+export const A_COLORS = Object.keys(H_COLORS) as CanonicalColor[];
+
+
+export const H_SHAPES = {
 	triangle: {
+		symbol: '▲',
 		labels: {
 			en: 'triangle',
 		},
 	},
 	square: {
+		symbol: '■',
 		labels: {
 			en: 'square',
 		},
 	},
 	circle: {
+		symbol: '●',
 		labels: {
 			en: 'circle',
 		},
 	},
 	star: {
+		symbol: '★',
 		labels: {
 			en: 'star',
 		},
 	},
-};
-
-export const A_SHAPES = Object.keys(H_SHAPES);
+} as const;
 
 export type CanonicalShape = keyof typeof H_SHAPES;
+
+export const A_SHAPES = Object.keys(H_SHAPES) as CanonicalShape[];
+
+interface Basis {
+	describe: {
+		[K in SupportedLanguage]: (s: string) => string;
+	}
+}
+
+export const H_BASES = {
+	nobody: {
+		describe: {
+			en: (s: string) => `nobody has ${s || '...'}`,
+		},
+	},
+	mine: {
+		describe: {
+			en: (s: string) => `my chip is ${s || '...'}`,
+		},
+	},
+} as const;
+
+export type CanonicalBasis = keyof typeof H_BASES;
+
+export const A_BASES = Object.keys(H_BASES) as CanonicalBasis[];

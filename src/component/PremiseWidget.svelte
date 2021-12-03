@@ -21,6 +21,8 @@
 		faCheckCircle,
 		faTimesCircle,
 		faQuestionCircle,
+		faDotCircle,
+		faMinusCircle,
 	} from '@fortawesome/free-solid-svg-icons';
 
 	import {
@@ -48,7 +50,7 @@
 		},
 		ignore: {
 			label: 'Ignore',
-			icon: faQuestionCircle,
+			icon: faDotCircle,
 		},
 	};
 
@@ -110,9 +112,9 @@
 	.truth {
 		display: inline-flex;
 		margin-left: 1.5em;
-		width: 250px;
+		width: 350px;
 		position: absolute;
-		top: -4px;
+		top: -5px;
 
 		.truth-opt {
 			flex: 1;
@@ -129,9 +131,9 @@
 				color: fade(white, 50%);
 			}
 
-			.truth-opt-icon {
-				margin-right: -1.5em;
-			}
+			// .truth-opt-icon {
+			// 	margin-right: -1.5em;
+			// }
 
 			&:hover {
 				background-color: fade(white, 5%);
@@ -179,7 +181,7 @@
 				<Fa icon={g_opt.icon}/>
 			</span>
 			<span class="truth-opt-text">
-				&nbsp;&nbsp;{g_opt.label}
+				{g_opt.label}
 			</span>
 		</span>
 	{/each}

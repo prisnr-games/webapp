@@ -27,6 +27,7 @@
     "typescript": "^4.4.4"
   },
   "dependencies": {
+    "@fingerprintjs/fingerprintjs": "^3.3.0",
     "@fortawesome/free-regular-svg-icons": "^5.15.4",
     "@fortawesome/free-solid-svg-icons": "^5.15.4",
     "@tweenjs/tween.js": "^18.6.4",

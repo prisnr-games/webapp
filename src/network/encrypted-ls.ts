@@ -1,9 +1,6 @@
-import { writable } from 'svelte/store';
 import ls from 'localstorage-slim';
 import encUTF8 from 'crypto-js/enc-utf8.js';
 import AES from 'crypto-js/aes.js';
-
-import fingerprintjs from '@fingerprintjs/fingerprintjs';
 
 import type {
 	lib as CryptoJS_lib,
@@ -44,36 +41,24 @@ export interface Permits {
 	[property: string]: Permit;
 }
 
-// use encryption for localstorage-slim
-ls.config.encrypt = !import.meta.env.DEV;
-
-// // global encryption secret
-// (async() => {
-// 	const y_agent = await fingerprintjs.load();
-// 	const g_result = y_agent.get();
-
-// 	ls.config.secret = (await g_result).visitorId;
-// })();
-
-
 const is_word_array = (z_input: unknown): z_input is WordArray => !!(z_input && Array.isArray((z_input as any).words));
 
 const is_cipher_params = (z_input: unknown): z_input is CipherParams => !!(z_input && is_word_array((z_input as any).ciphertext));
 
 // update encrypter to use AES encryption
-ls.config.encrypter = (w_data: unknown, z_secret: unknown) => {
-	if('string' === typeof z_secret || is_word_array(z_secret)) {
+const encrypter = (w_data: unknown, z_secret: unknown) => {
+	if ('string' === typeof z_secret || is_word_array(z_secret)) {
 		return AES.encrypt(JSON.stringify(w_data), z_secret).toString();
 	}
 	else {
 		throw new TypeError(`Invalid argument type for 'secret': ${z_secret}`);
 	}
 }
- 
+
 // update decrypter to decrypt AES-encrypted data
-ls.config.decrypter = (z_data: unknown, z_secret: unknown): string => {
-	if('string' === typeof z_data || is_cipher_params(z_data)) {
-		if('string' === typeof z_secret || is_word_array(z_secret)) {
+const decrypter = (z_data: unknown, z_secret: unknown): string => {
+	if ('string' === typeof z_data || is_cipher_params(z_data)) {
+		if ('string' === typeof z_secret || is_word_array(z_secret)) {
 			try {
 				return JSON.parse(AES.decrypt(z_data, z_secret).toString(encUTF8));
 			} catch (e) {
@@ -90,9 +75,35 @@ ls.config.decrypter = (z_data: unknown, z_secret: unknown): string => {
 	}
 };
 
-export const permitsStore = writable<Permits>(ls.get('permits') || {});
+export class EncryptedLS {
+	#_gc_ls: any;
 
-permitsStore.subscribe((value: Permits) => {
-	ls.set('permits', value);
-});
+	constructor(s_secret: string) {
+		this.#_gc_ls = {
+			encrypt: !!import.meta.env.DEV,
+			encrypter,
+			decrypter,
+			secret: s_secret,
+		};
+	}
 
+	set(si_key: string, w_value: any) {
+		return ls.set(si_key, w_value, this.#_gc_ls);
+	}
+
+	get<T>(si_key: string) {
+		return ls.get<T>(si_key, this.#_gc_ls);
+	}
+
+	clear() {
+		return ls.clear();
+	}
+
+	flush(b_force?: boolean | undefined) {
+		return ls.flush(b_force);
+	}
+
+	remove(si_key: string) {
+		return ls.remove(si_key);
+	}
+}

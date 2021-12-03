@@ -1,10 +1,29 @@
-import { get, writable } from "svelte/store";
-import type { ChainInfo, Keplr, Key } from "@keplr-wallet/types";
-// import { SigningCosmWasmClient } from 'secretjs';
-import type { StdSignature } from "secretjs/types/types";
-import { permitName } from "./permits";
-import { CONTRACT } from "./contract";
-import { timeout } from '#/util/belt';
+import type {
+	Keplr,
+	Key,
+} from "@keplr-wallet/types";
+
+import type {
+	StdSignature,
+} from "secretjs/types/types";
+
+import type {
+	AccountData,
+	OfflineSigner,
+} from 'secretjs/types/wallet';
+
+import type {
+	SecretUtils,
+} from 'secretjs/types/enigmautils';
+
+
+import {
+	P_CONTRACT_ADDR,
+} from "./contract";
+
+import {
+	SI_PERMIT,
+} from "./permits";
 
 import {
 	WalletError,
@@ -15,14 +34,6 @@ import type {
 	SecretChainInfo,
 } from './wallet';
 
-import type {
-	AccountData,
-	OfflineSigner,
-} from 'secretjs/types/wallet';
-
-import type {
-	SecretUtils,
-} from 'secretjs/types/enigmautils';
 
 export class EnableKeplrError extends WalletError {
 	constructor(e_enable: unknown) {
@@ -70,30 +81,6 @@ export class KeplrWallet implements Wallet {
 	async enable(g_chain: SecretChainInfo): Promise<boolean> {
 		const si_chain = this._si_chain = g_chain.chainId;
 
-		// enable
-		try {
-			await this._k_keplr.enable(si_chain);
-		}
-		catch(e_enable: unknown) {
-			throw new EnableKeplrError(e_enable);
-		}
-
-		// offline signer
-		try {
-			this._k_signer = window.getOfflineSigner!(si_chain) as unknown as OfflineSigner;
-		}
-		catch(e_signer: unknown) {
-			throw new OfflineSignerError(e_signer);
-		}
-
-		// enigma utils
-		try {
-			this._k_enigma = window.getEnigmaUtils!(si_chain);
-		}
-		catch(e_enigma: unknown) {
-			throw new EnigmaUtilsError(e_enigma);
-		}
-		
 		// suggest chain
 		try {
 			await this._k_keplr.experimentalSuggestChain({
@@ -140,8 +127,32 @@ export class KeplrWallet implements Wallet {
 				features: ['secretwasm'],
 			});
 		}
-		catch(e_suggest) {
+		catch (e_suggest) {
 			return false;
+		}
+
+		// enable
+		try {
+			await this._k_keplr.enable(si_chain);
+		}
+		catch(e_enable: unknown) {
+			throw new EnableKeplrError(e_enable);
+		}
+
+		// offline signer
+		try {
+			this._k_signer = window.getOfflineSigner!(si_chain) as unknown as OfflineSigner;
+		}
+		catch(e_signer: unknown) {
+			throw new OfflineSignerError(e_signer);
+		}
+
+		// enigma utils
+		try {
+			this._k_enigma = window.getEnigmaUtils!(si_chain);
+		}
+		catch(e_enigma: unknown) {
+			throw new EnigmaUtilsError(e_enigma);
 		}
 
 		// save key
@@ -154,12 +165,60 @@ export class KeplrWallet implements Wallet {
 		return true;
 	}
 
+	get chain(): string {
+		return this._si_chain;
+	}
+
 	get key(): Key {
 		return this._g_key;
 	}
 
 	get accounts(): readonly AccountData[] {
 		return this._a_accounts;
+	}
+
+	get primaryAccount(): AccountData {
+		return this.accounts[0];
+	}
+
+	get publicAddress(): string {
+		return this.primaryAccount.address;
+	}
+
+	async signQueryPermit(): Promise<StdSignature> {
+		return (await this._k_keplr.signAmino(
+			this.chain,
+			this.publicAddress,
+			{
+				chain_id: this.chain,
+				account_number: '0',
+				sequence: '0',
+				fee: {
+					amount: [
+						{
+							denom: 'uscrt',
+							amount: '0',
+						},
+					],
+					gas: '1',
+				},
+				msgs: [
+					{
+						type: 'query_permit',
+						value: {
+							permit_name: SI_PERMIT,
+							allowed_tokens: [P_CONTRACT_ADDR],
+							permissions: ['owner'],
+						},
+					},
+				],
+				memo: '',
+			},
+			{
+				preferNoSetFee: true,
+				preferNoSetMemo: true,
+			},
+		)).signature;
 	}
 }
 

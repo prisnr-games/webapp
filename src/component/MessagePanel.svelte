@@ -9,13 +9,16 @@
 		ledger?: boolean;
 	}
 
+	type TextInput = string | string[];
+
 	export interface MessagePanelHelper {
 		reveal_text(s_reveal: string, xt_interval?: number, xt_pause?: number): Promise<void>;
 		commit(): Promise<void>;
 		receive(g_msg: ReceivedMessage): Promise<void>;
-		arbiter(z_text: string | string[], h_widgets?: Widgets): Promise<void>;
+		arbiter(z_text: TextInput, h_widgets?: Widgets): Promise<void>;
 		opponent(a_text: string[], h_widgets?: Widgets): Promise<void>;
-		error(s_text: string, b_fatal?: boolean): Promise<void>;
+		error(z_text: TextInput, b_fatal?: boolean): Promise<void>;
+		warn(z_text: TextInput): Promise<void>;
 		wallet(g_addr: AddrInfo): void;
 		submittable(fk_submit: VoidFunction | null, s_tag?: string): void;
 		unsubmittable(): void;
@@ -91,6 +94,7 @@
 		arbiter,
 		opponent,
 		error,
+		warn,
 		wallet,
 		submittable,
 		unsubmittable,
@@ -309,11 +313,13 @@
 		dm_curtain.remove();
 	}
 
-	async function arbiter(z_text: string | string[], h_widgets?: Widgets): Promise<void> {
+	const rerformat_lines = (z_text: TextInput) => Array.isArray(z_text)? z_text: z_text.trim().split(/\n/).map(s => s.trim());
+
+	async function arbiter(z_text: TextInput, h_widgets?: Widgets): Promise<void> {
 		return await receive({
 			from: 'Arbiter',
 			classes: ['from-arbiter'],
-			text: Array.isArray(z_text)? z_text: z_text.trim().split(/\n/).map(s => s.trim()),
+			text: rerformat_lines(z_text),
 			widgets: h_widgets || {},
 		});
 	}
@@ -337,16 +343,24 @@
 		s_text = '';
 	}
 
-	async function error(s_text: string, b_fatal=false): Promise<void> {
+	async function error(z_text: TextInput, b_fatal=false): Promise<void> {
 		await receive({
 			from: 'System',
-			classes: ['from-system'],
-			text: s_text.split(/\n/g),
+			classes: ['from-system-error'],
+			text: rerformat_lines(z_text),
 		});
 
 		if(b_fatal) {
 			b_disabled = true;
 		}
+	}
+
+	async function warn(z_text: TextInput): Promise<void> {
+		await receive({
+			from: 'System',
+			classes: ['from-system-warn'],
+			text: rerformat_lines(z_text),
+		});
 	}
 
 	function wallet(g_addr: AddrInfo): void {
@@ -616,8 +630,12 @@
 			color: @user-color;
 		}
 
-		:global(.from-system) {
+		:global(.from-system-error) {
 			color: #ff0000;
+		}
+
+		:global(.from-system-warn) {
+			color: #ffff00;
 		}
 
 		:global(.curtain) {

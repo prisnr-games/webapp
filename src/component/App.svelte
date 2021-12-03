@@ -29,6 +29,10 @@
 		faClock,
 	} from '@fortawesome/free-solid-svg-icons';
 
+	import fingerprintjs from '@fingerprintjs/fingerprintjs';
+
+	import ls from 'localstorage-slim';
+
 	import {
 		SupportedLanguage,
 		H_LANGUAGES,
@@ -36,9 +40,9 @@
 		H_SHAPES,
 		CanonicalColor,
 		CanonicalShape,
-A_BASES,
-CanonicalBasis,
-H_BASES,
+		A_BASES,
+		CanonicalBasis,
+		H_BASES,
 	} from '#/intl/game';
 
 	import {
@@ -92,7 +96,8 @@ H_BASES,
 	import PremiseWidget, {PremiseHelper} from './PremiseWidget.svelte';
 	
 	import {permitName, permitsStore, Permit, PermitParams, Permits } from '#/network/permits';
-	import { CONTRACT } from '#/network/contract';
+	import { CONTRACT, P_CONTRACT_ADDR } from '#/network/contract';
+import { EncryptedLS, SI_PERMIT } from '#/network/encrypted-ls';
 
 	const XT_SECONDS = 1000;
 	const XTL_MINUTES = 60 * XT_SECONDS;
@@ -104,37 +109,10 @@ H_BASES,
 	});
 
 
-	// keplrStore.subscribe((value: KeplrStore) => {
-	// 	keplr = value;
-	// });
-
-	let permit: Permit;
-	// onMount( async () => {
-	// 	await holdForKeplr(keplr);
-   //      const { scrtClient } = keplr;
-	// 	if (!scrtClient) { return; }
-
-	// 	if (permits[scrtClient.senderAddress]) {
-	// 		permit = permits[scrtClient.senderAddress];
-	// 	} else {
-	// 		try {
-	// 			let signature = await getSignature(CHAIN_ID);
-	// 			let permit_params: PermitParams = {
-	// 				allowed_tokens: [CONTRACT],
-	// 				chain_id: CHAIN_ID,
-	// 				permit_name: permitName,
-	// 				permissions: ["owner"],
-	// 			};
-	// 			permit = {
-	// 				params: permit_params,
-	// 				signature
-	// 			}
-	// 			permitsStore.set({...permits, [scrtClient.senderAddress]: permit});
-	// 		} catch (err: any) {
-	// 			console.log(err.toString());
-	// 		}
-	// 	}
-	// })
+	/**
+	 * query permit for game
+	 */
+	let g_permit: Permit;
 
 
 	/**
@@ -252,7 +230,96 @@ H_BASES,
 		return reload();
 	}
 
-	async function connect_wallet(): Promise<void> {
+	async function connect_wallet(n_retries=0): Promise<void> {
+		// 
+		await k_panel.warn(`
+			This game stores encrypted query permit data in local storage.
+			
+			In order to protect this data, you must provide a passphrase each time the page is loaded.
+		`);
+
+		async function enter_passphrase(c_retries=0): Promise<string> {
+			// whether it was clicked (before instruction)
+			let b_clicked = false;
+
+			// first attempt
+			if(!c_retries) {
+				// wait for button to fade in a little
+				setTimeout(() => {
+					if(!b_clicked) {
+						// show text
+						void k_panel.reveal_text('↓↓ click below to enter passphrase ↓↓');  // ▼
+					}
+				}, 6500);
+			}
+			
+			// show button
+			await k_prompt.ok('Provide passphrase');
+
+			// clicked
+			b_clicked = true;
+
+			// prompt for passphrase and save to local field
+			const atu8_seed = new Uint8Array(32); // 33 - 126
+			crypto.getRandomValues(atu8_seed);
+			const s_prompt_default = [...atu8_seed].map(x => String.fromCharCode((x % 93)+33)).join('');
+			const s_passphrase = window.prompt('Enter a passphrase to encrypt/decrypt query permits', s_prompt_default);
+
+			// blank
+			if(!s_passphrase) {
+				const a_retries = [
+					`null key encryption, eh? try again you silly goose`,
+					`i can do this all day, can you?`,
+					`there are only so many responses i have...`,
+					`...and you're starting to piss me off`,
+					`i'm serious dood -- don't make me`,
+				];
+
+				if(c_retries < a_retries.length) {
+					k_panel.reveal_text(a_retries[c_retries], 40);
+				}
+				else {
+					window.location.href = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+				}
+
+				// retry
+				return enter_passphrase(c_retries+1);
+			}
+			// too weak
+			else if(s_passphrase.length < 5) {
+				k_panel.reveal_text('passphrase must be at least 5 characters');
+
+				// retry
+				return enter_passphrase(c_retries+1);
+			}
+			// valid
+			else {
+				return s_passphrase;
+			}
+		}
+
+		// use fingerprint
+		const y_agent = await fingerprintjs.load();
+		const g_result = y_agent.get();
+		const p_fingerprint = (await g_result).visitorId;
+
+		// get passphrase
+		const s_passphrase = await enter_passphrase();
+
+		// combine
+		const k_ls = new EncryptedLS([p_fingerprint, s_passphrase, 'salt'].join('|'));
+
+
+		// prepare for wallet connection
+		await k_panel.warn(`
+			This is a multiplayer, online game that uses smart contracts on the Secret Network to ensure fairness for all players.
+
+			Interacting with the game requires submitting transactions to the blockchain via a web wallet such as Keplr (or a local wallet for testnet only).
+		`);
+
+		// pause for effect
+		await timeout(600);
+
 		// wait for response
 		const si_opt = await k_prompt.opts({
 			keplr: KeplrWallet.isAvailable()? {
@@ -315,8 +382,15 @@ H_BASES,
 		catch(e_enable: unknown) {
 			// user did not enable
 			if(e_enable instanceof EnableKeplrError) {
+				if(n_retries >= 3) {
+					return fatal(`Keplr connection request rejected too many times`);
+				}
+
+				// pause
+				await timeout(2000);
+
 				// retry
-				return await connect_wallet();
+				return await connect_wallet(n_retries+1);
 			}
 			// offline signer unavailable
 			else if(e_enable instanceof OfflineSignerError) {
@@ -348,13 +422,53 @@ H_BASES,
 		// 	return fatal('No accounts were detected in your wallet.');
 		// }
 
+		const p_signer = g_key.bech32Address;
+
 		// set wallet info
 		k_panel.wallet({
 			name: g_key.name,
-			addr: g_key.bech32Address,
+			addr: p_signer,
 			ledger: g_key.isNanoLedger,
 		});
-		
+
+		const h_permits = k_ls.get('permits') as Record<string, Permit> | null;
+
+		if(h_permits && h_permits[p_signer]) {
+			g_permit = h_permits[p_signer];
+		}
+		else {
+			// 
+			await k_panel.reveal_text(`create a query permit`);
+
+			await k_prompt.ok('Create permit');
+			
+			try {
+				// build permit
+				g_permit = {
+					params: {
+						chain_id: k_wallet.chain,
+						allowed_tokens: [P_CONTRACT_ADDR],
+						permit_name: SI_PERMIT,
+						permissions: ['owner'],
+					} as PermitParams,
+					signature: await k_wallet.signQueryPermit(),
+				};
+
+				// append
+				k_ls.set('permits', {
+					...(h_permits || {}),
+					[p_signer]: g_permit,
+				});
+			}
+			catch(e_sign_set: any) {
+				return fatal(e_sign_set.stack);
+			}
+		}
+
+		await timeout(1200);
+
+		await k_panel.reveal_text(``);
+
 		// wait for animation to complete
 		await timeout(1100);
 	}
@@ -366,6 +480,18 @@ H_BASES,
 		// ref last seen value
 		let s_last_seen = h_cookie.last_seen;
 
+		// set last seen value, expires in 30 days
+		write_cookie({
+			last_seen: ''+Date.now(),
+		}, 60*60*24*30);
+
+		// re-read cookie
+		h_cookie = read_cookie();
+
+		// connect wallet
+		await connect_wallet();
+
+
 		// hasn't seen introduction yet; run introduction
 		if(!s_last_seen) {
 			await introduction();
@@ -374,14 +500,6 @@ H_BASES,
 		else {
 			await welcome_back();
 		}
-
-		// set last seen value, expires in 30 days
-		write_cookie({
-			last_seen: ''+Date.now(),
-		}, 60*60*24*30);
-
-		// re-read cookie
-		h_cookie = read_cookie();
 
 		// gameplay explanation                                                                                    |
 		await k_panel.arbiter(`
@@ -400,8 +518,11 @@ H_BASES,
 		// ask if ready to join
 		await k_panel.reveal_text('ready to play?');
 
-		// connect wallet
-		await connect_wallet();
+		// join a game
+		await k_prompt.ok('Join a game');
+
+		// prompt
+
 
 		si_player_color = Object.keys(H_COLORS)[Math.floor(Math.random() * 4)] as CanonicalColor;
 		si_player_shape = Object.keys(H_SHAPES)[Math.floor(Math.random() * 4)] as CanonicalShape;

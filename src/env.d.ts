@@ -5,6 +5,8 @@ interface ImportMetaEnv {
 	readonly VITE_NETWORK_CHAIN_NAME: string;
 	readonly VITE_NETWORK_LCD_REST: string;
 	readonly VITE_NETWORK_LCD_RPC: string;
+	readonly VITE_PERMIT_NAME: string;
+	readonly VITE_CONTRACT_ADDR: string;
 }
 
 interface ImportMeta {

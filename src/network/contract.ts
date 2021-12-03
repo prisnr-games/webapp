@@ -2,7 +2,11 @@
 //import { get } from 'svelte/store';
 //import { Permit } from "./permits";
 
-export const CONTRACT = 'secretxyz';
+/**
+ * contract address
+ */
+export const P_CONTRACT_ADDR = import.meta.env.VITE_CONTRACT_ADDR;
+
 
 const entropyGenerator = (length: number): string => {
 	var base = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('');

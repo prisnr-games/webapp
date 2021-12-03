@@ -1,4 +1,5 @@
 import type { Key } from '@keplr-wallet/types';
+import type { StdSignature } from 'secretjs/types/types';
 import type { AccountData } from 'secretjs/types/wallet';
 
 /**
@@ -57,8 +58,12 @@ export class NotEnabledError extends WalletError {
  */
 export interface Wallet {
 	enable(g_chain: SecretChainInfo): Promise<boolean>;
+	get chain(): string;
 	get key(): Key;
 	get accounts(): readonly AccountData[];
+	get primaryAccount(): AccountData;
+	get publicAddress(): string;
+	signQueryPermit(): Promise< StdSignature>;
 }
 
 export interface SecretChainInfo {

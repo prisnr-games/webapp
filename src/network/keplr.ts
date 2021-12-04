@@ -252,7 +252,7 @@ export class KeplrWallet implements Wallet {
 	}
 
 	execute(p_contract: string, g_msg: JsonObject, g_xfer?: readonly Coin[], g_fee?: StdFee, si_code_hash?: string): Promise<ExecuteResult> {
-		return this._k_client.execute(p_contract, g_msg, '', g_xfer, g_fee, si_code_hash);
+		return this._k_client.execute(p_contract, g_msg, '', g_xfer, g_fee);
 	}
 }
 // async function connectKeplr(chainId: string, secretLcd: string) {

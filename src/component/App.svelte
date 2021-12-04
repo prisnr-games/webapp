@@ -555,7 +555,6 @@ SI_CONTRACT_CODE_HASH,
 		// attempt to join
 		let g_join: ContractExecInfo<JoinResponse>;
 		try {
-			debugger;
 			g_join = await k_game.joinGame();
 		}
 		// failed
@@ -580,7 +579,29 @@ SI_CONTRACT_CODE_HASH,
 			}
 		}
 
-		debugger;
+		// destructure join results
+		const {
+			join: g_res_join,
+			error: se_join,
+		} = g_join.data;
+
+		// error
+		if(se_join) {
+			return fatal(se_join);
+		}
+
+		// 
+		const g_game_join = g_res_join?.game_state;
+
+		// must wait for another player
+		if(g_game_join?.round) {
+			// TODO: notifications and bell sound
+			k_panel.warn(`Created a new game. Now waiting for another player...`);
+		}
+		// ready to play
+		else {
+
+		}
 
 
 		si_player_color = Object.keys(H_COLORS)[Math.floor(Math.random() * 4)] as CanonicalColor;

@@ -31,8 +31,6 @@
 
 	import fingerprintjs from '@fingerprintjs/fingerprintjs';
 
-	import ls from 'localstorage-slim';
-
 	import {
 		SupportedLanguage,
 		H_LANGUAGES,
@@ -95,23 +93,27 @@
 	import Scene, {SceneHelper} from './Scene.svelte';
 	import PremiseWidget, {PremiseHelper} from './PremiseWidget.svelte';
 	
-	import {permitName, permitsStore, Permit, PermitParams, Permits } from '#/network/permits';
-	import { CONTRACT, P_CONTRACT_ADDR } from '#/network/contract';
 
 	import {
+		Permit,
+		PermitParams,
 		SI_PERMIT,
+	} from '#/network/permits';
+
+	import {
+ContractExecInfo,
+GameContract,
+		JoinResponse,
+		P_CONTRACT_ADDR,
+SI_CONTRACT_CODE_HASH,
+	} from '#/network/contract';
+
+	import {
 		EncryptedLocalStorage,
-		EncryptedLS,
-	} from '#/network/encrypted-ls';
+	} from '#/util/encrypted-local-storage';
 
 	const XT_SECONDS = 1000;
 	const XTL_MINUTES = 60 * XT_SECONDS;
-
-
-	let permits: Permits;
-	permitsStore.subscribe((value: Permits) => {
-		permits = value;
-	});
 
 
 	/**
@@ -384,6 +386,7 @@
 		}
 		// something went wrong
 		catch(e_enable: unknown) {
+			debugger;
 			// user did not enable
 			if(e_enable instanceof EnableKeplrError) {
 				if(n_retries >= 3) {
@@ -418,14 +421,7 @@
 		// get key store
 		const g_key = k_wallet.key;
 
-		// // get accounts
-		// const a_accounts = k_wallet.accounts;
-		
-		// // no accounts
-		// if(!a_accounts.length) {
-		// 	return fatal('No accounts were detected in your wallet.');
-		// }
-
+		// ref signer address
 		const p_signer = g_key.bech32Address;
 
 		// set wallet info
@@ -435,9 +431,10 @@
 			ledger: g_key.isNanoLedger,
 		});
 
-		// local storage
+		// create encrypted local storage instance
 		const k_ls = new EncryptedLocalStorage(p_signer, [p_fingerprint, s_passphrase, 'salt'].join('|'));
 
+		// try to fetch any existing permits
 		let h_permits: Record<string, Permit> | null = null;
 		try {
 			h_permits = k_ls.get<Record<string, Permit>>('permits');
@@ -462,9 +459,9 @@
 				Signing a query permit happens offline and does not require any gas.
 			`);
 
-			await timeout(600);
+			await timeout(1800);
 
-			await k_panel.reveal_text('ready to sign?');
+			// await k_panel.reveal_text('ready to sign?');
 
 			await k_prompt.ok('Sign permit');
 			
@@ -549,7 +546,41 @@
 		// join a game
 		await k_prompt.ok('Join a game');
 
-		// prompt
+		// clear prompt
+		void k_panel.reveal_text('');
+
+		// instantiate game contract
+		const k_game = new GameContract(k_wallet, P_CONTRACT_ADDR, SI_CONTRACT_CODE_HASH);
+
+		// attempt to join
+		let g_join: ContractExecInfo<JoinResponse>;
+		try {
+			debugger;
+			g_join = await k_game.joinGame();
+		}
+		// failed
+		catch(e_join: unknown) {
+			// error
+			if(e_join instanceof Error) {
+				const se_join = e_join.message;
+
+				// no scrt
+				if(/Account does not exist/.test(se_join)) {
+					return fatal(`Looks like your wallet is empty. Make sure to acquire some SCRT tokens so that you pay the gas fees for transactions.`);
+				}
+				// unhandled
+				else {
+					debugger;
+					return fatal(`Unhandled error: ${e_join.stack}`);
+				}
+			}
+			// unknown
+			else {
+				return fatal(`Unknown error: ${e_join}`);
+			}
+		}
+
+		debugger;
 
 
 		si_player_color = Object.keys(H_COLORS)[Math.floor(Math.random() * 4)] as CanonicalColor;

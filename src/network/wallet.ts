@@ -1,5 +1,7 @@
+import type { JsonValue } from '#/util/types';
 import type { Key } from '@keplr-wallet/types';
-import type { StdSignature } from 'secretjs/types/types';
+import type { ExecuteResult } from 'secretjs';
+import type { Coin, JsonObject, StdFee, StdSignature } from 'secretjs/types/types';
 import type { AccountData } from 'secretjs/types/wallet';
 
 /**
@@ -53,6 +55,7 @@ export class NotEnabledError extends WalletError {
 	}
 }
 
+
 /**
  * wallet interface
  */
@@ -64,6 +67,7 @@ export interface Wallet {
 	get primaryAccount(): AccountData;
 	get publicAddress(): string;
 	signQueryPermit(): Promise< StdSignature>;
+	execute(p_contract: string, g_msg: JsonObject, g_xfer?: readonly Coin[], g_fee?: StdFee, si_code_hash?: string): Promise<ExecuteResult>
 }
 
 export interface SecretChainInfo {

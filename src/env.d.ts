@@ -7,6 +7,7 @@ interface ImportMetaEnv {
 	readonly VITE_NETWORK_LCD_RPC: string;
 	readonly VITE_PERMIT_NAME: string;
 	readonly VITE_CONTRACT_ADDR: string;
+	readonly VITE_CONTRACT_CODE_HASH: string;
 }
 
 interface ImportMeta {

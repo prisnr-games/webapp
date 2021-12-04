@@ -1,6 +1,6 @@
 <script context="module" lang="ts">
 	import type { Writable } from 'svelte/store';
-	import type { PermitParams } from '#/network/encrypted-ls';
+	import type { PermitParams } from '#/util/encrypted-local-storage';
 
 	export type Widgets = Record<string, Writable<string> | HTMLElement>;
 
@@ -379,11 +379,11 @@
 		}
 	}
 
-	let s_permit_display: string = '';
+	let a_permit_displays: string[] = [];
 	function permit(g_permit: PermitParams): void {
 		const p_token = g_permit.allowed_tokens[0];
 
-		s_permit_display = 'signed: '+p_token.slice(0, 'secret12345'.length)+'...'+p_token.slice(-5);
+		a_permit_displays = [p_token.slice(0, 'secret12345'.length), p_token.slice(-5)];
 	}
 
 	let dt_attempt_last = 0;
@@ -561,7 +561,7 @@
 		box-shadow: 0 0 12px 6px black;
 
 		.msg-nav-group {
-			margin: 0 8px;
+			margin: 0 6px;
 		}
 
 		.msg-nav-name {
@@ -579,8 +579,24 @@
 			font-size: 12px;
 		}
 
+		.addr {
+			// condense it a bit
+			letter-spacing: -0.03rem;
+		}
+
+		.prefix {
+			letter-spacing: -0.02rem;
+		}
+
 		.msg-nav-permit {
 			font-size: 12px;
+
+			.ellipsis {
+				margin-left: -4px;
+				margin-right: -4px;
+				display: inline-block;
+				transform: scaleX(0.45);
+			}
 		}
 
 		.msg-nav-icon {
@@ -588,7 +604,12 @@
 			font-size: 16px;
 
 			:global(&>svg) {
-				filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.6))
+				filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.6));
+				vertical-align: middle !important;
+			}
+
+			:global(&.lifted>svg) {
+				vertical-align: -0.125em !important;
 			}
 		}
 	}
@@ -692,6 +713,10 @@
 		}
 	}
 
+	.inline-flex {
+		display: inline-flex;
+	}
+
 	.msg-buttons {
 	}
 
@@ -753,17 +778,22 @@
 	{#if b_nav_display}
 		<div class="msg-nav" transition:slide={{duration:750, easing:quadOut}}>
 			<span class="msg-nav-group">
-				<span class="msg-nav-icon"><Fa icon={faUser}/></span>
+				<span class="msg-nav-icon lifted"><Fa icon={faUser}/></span>
 				<span class="msg-nav-name" class:long-name={s_nav_name.length >= 40}>{s_nav_name}</span>
 			</span>
 			<span class="msg-nav-group">
 				<span class="msg-nav-icon"><Fa icon={faWallet}/></span>
-				<span class="msg-nav-addr">{s_nav_addr}</span>
+				<span class="msg-nav-addr addr">{s_nav_addr}</span>
 			</span>
-			{#if s_permit_display}
+			{#if a_permit_displays.length}
 				<span class="msg-nav-group" transition:fade={{duration:1000}}>
 					<span class="msg-nav-icon"><Fa icon={faTicketAlt}/></span>
-					<span class="msg-nav-permit">{s_permit_display}</span>
+					<span class="msg-nav-permit inline-flex">
+						<span class="prefix">signed:</span>
+						<span class="addr">{a_permit_displays[0]}</span>
+						<span class="ellipsis">...</span>
+						<span class="addr">{a_permit_displays[1]}</span>
+					</span>
 				</span>
 			{/if}
 		</div>

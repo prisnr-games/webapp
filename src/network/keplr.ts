@@ -261,49 +261,11 @@ export class KeplrWallet implements Wallet {
 			s_opts += ` --amount ${g_xfer.amount}${g_xfer.denom}`;
 		}
 		console.log(`secretd tx compute execute ${p_contract} '${JSON.stringify(g_msg)}' --from ${this.publicAddress}${s_opts}`);
-		return this._k_client.execute(p_contract, g_msg, '', a_xfer, g_fee);
+		return this._k_client.execute(p_contract, g_msg, '', a_xfer, g_fee);  // , si_code_hash || void 0
 	}
 
 	query(p_contract: string, g_msg: JsonObject, g_params?: JsonObject, si_code_hash?: string): Promise<JsonObject> {
 		console.log(`secretd q compute ${p_contract} '${JSON.stringify(g_msg)}' --from ${this.publicAddress}`);
-		return this._k_client.queryContractSmart(p_contract, g_msg, g_params || {}, si_code_hash || void 0);
+		return this._k_client.queryContractSmart(p_contract, g_msg, g_params || {});  // , si_code_hash || void 0
 	}
 }
-// export async function getSignature(chainId: string): Promise<StdSignature> {
-// 	// @ts-ignore
-// 	const keplrOfflineSigner = window.getOfflineSigner(chainId);
-// 	const accounts = await keplrOfflineSigner.getAccounts();
-// 	const myAddress = accounts[0].address;
-
-// 	// @ts-ignore
-// 	const { signature } = await window.keplr.signAmino(
-// 		chainId,
-// 		myAddress,
-// 		{
-// 			chain_id: chainId,
-// 			account_number: "0",
-// 			sequence: "0",
-// 			fee: {
-// 				amount: [{ denom: "uscrt", amount: "0" }],
-// 				gas: "1",
-// 			},
-// 			msgs: [
-// 				{
-// 					type: "query_permit",
-// 					value: {
-// 						permit_name: permitName,
-// 						allowed_tokens: [CONTRACT],
-// 						permissions: ["owner"],
-// 					},
-// 				},
-// 			],
-// 			memo: "",
-// 		},
-// 		{
-// 			preferNoSetFee: true,
-// 			preferNoSetMemo: true,
-// 		}
-// 	);
-// 	return signature;
-// }
-

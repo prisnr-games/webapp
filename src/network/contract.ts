@@ -310,87 +310,87 @@ export class GameContract {
 // 	}
 // }
 
-// Calls Guess function in contract to make a guess at the end of round 1.
-// Will return an error if the game is not in the correct round/state to receive a guess.
-export const executeGuess = async (target: string, shape: string | null, color: string | null): Promise<GuessResponse> => {
-	// TODO: need to update wallet
-	const keplr = get(keplrStore);
-	const { keplrEnabled, scrtAuthorized, scrtClient } = keplr;
-	if (!keplrEnabled || !scrtAuthorized || !scrtClient) {
-		return { error: "Keplr not enabled" };
-	}
+// // Calls Guess function in contract to make a guess at the end of round 1.
+// // Will return an error if the game is not in the correct round/state to receive a guess.
+// export const executeGuess = async (target: string, shape: string | null, color: string | null): Promise<GuessResponse> => {
+// 	// TODO: need to update wallet
+// 	const keplr = get(keplrStore);
+// 	const { keplrEnabled, scrtAuthorized, scrtClient } = keplr;
+// 	if (!keplrEnabled || !scrtAuthorized || !scrtClient) {
+// 		return { error: "Keplr not enabled" };
+// 	}
 
-	if (target != "abstain" && target != "bag" && target != "opponent") {
-		return { error: "Invalid target for guess" };
-	}
+// 	if (target != "abstain" && target != "bag" && target != "opponent") {
+// 		return { error: "Invalid target for guess" };
+// 	}
 
-	if (target != "abstain" && (shape === null || color === null)) {
-		return { error: "Guess must have a color and shape, unless you are abstaining" };
-	}
+// 	if (target != "abstain" && (shape === null || color === null)) {
+// 		return { error: "Guess must have a color and shape, unless you are abstaining" };
+// 	}
 
-	let executeMsg: GuessMsg = {
-		guess: {
-			target
-		}
-	}
+// 	let executeMsg: GuessMsg = {
+// 		guess: {
+// 			target
+// 		}
+// 	}
 
-	if (color != null && shape != null) {
-		if (color != "red" && color != "blue" && color != "green" && color != "black") {
-			return { error: "Invalid color in guess" };
-		}
-		if (shape != "triangle" && shape != "square" && shape != "circle" && shape != "star") {
-			return { error: "Invalid shape in guess" };
-		}
-		executeMsg.guess.color = color;
-		executeMsg.guess.shape = shape;
-	}
+// 	if (color != null && shape != null) {
+// 		if (color != "red" && color != "blue" && color != "green" && color != "black") {
+// 			return { error: "Invalid color in guess" };
+// 		}
+// 		if (shape != "triangle" && shape != "square" && shape != "circle" && shape != "star") {
+// 			return { error: "Invalid shape in guess" };
+// 		}
+// 		executeMsg.guess.color = color;
+// 		executeMsg.guess.shape = shape;
+// 	}
 
-	const funds = [];
-	const fee = {
-		amount: [{ amount: "10000", denom: "uscrt" }],
-		gas: "40000",
-	};
+// 	const funds = [];
+// 	const fee = {
+// 		amount: [{ amount: "10000", denom: "uscrt" }],
+// 		gas: "40000",
+// 	};
 
-	try {
-		const response = await scrtClient.execute(P_CONTRACT_ADDR, executeMsg, "", funds, fee);
-		let data: GuessResponse = JSON.parse(d_decoder.decode(response.data));
-		return data;
-	} catch (error: any) {
-		return { error: error.toString() };
-	}
-}
+// 	try {
+// 		const response = await scrtClient.execute(P_CONTRACT_ADDR, executeMsg, "", funds, fee);
+// 		let data: GuessResponse = JSON.parse(d_decoder.decode(response.data));
+// 		return data;
+// 	} catch (error: any) {
+// 		return { error: error.toString() };
+// 	}
+// }
 
-// Calls PickReward function in contract to pick a reward in round 3.
-// Will return an error if the game is not in the correct round/state to have player pick a reward.
-export const executePickReward = async (reward: string): Promise<PickRewardResponse> => {
-	// TODO: need to update wallet
-	const keplr = get(keplrStore);
-	const { keplrEnabled, scrtAuthorized, scrtClient } = keplr;
-	if (!keplrEnabled || !scrtAuthorized || !scrtClient) {
-		return { error: "Keplr not enabled" };
-	}
+// // Calls PickReward function in contract to pick a reward in round 3.
+// // Will return an error if the game is not in the correct round/state to have player pick a reward.
+// export const executePickReward = async (reward: string): Promise<PickRewardResponse> => {
+// 	// TODO: need to update wallet
+// 	const keplr = get(keplrStore);
+// 	const { keplrEnabled, scrtAuthorized, scrtClient } = keplr;
+// 	if (!keplrEnabled || !scrtAuthorized || !scrtClient) {
+// 		return { error: "Keplr not enabled" };
+// 	}
 
-	if (reward != "pool" && reward != "nft") {
-		return { error: "Invalid value for picked reward" };
-	}
+// 	if (reward != "pool" && reward != "nft") {
+// 		return { error: "Invalid value for picked reward" };
+// 	}
 
-	let executeMsg: PickRewardMsg = {
-		pick_reward: {
-			reward
-		}
-	}
+// 	let executeMsg: PickRewardMsg = {
+// 		pick_reward: {
+// 			reward
+// 		}
+// 	}
 
-	const funds = [];
-	const fee = {
-		amount: [{ amount: "10000", denom: "uscrt" }],
-		gas: "40000",
-	};
+// 	const funds = [];
+// 	const fee = {
+// 		amount: [{ amount: "10000", denom: "uscrt" }],
+// 		gas: "40000",
+// 	};
 
-	try {
-		const response = await scrtClient.execute(P_CONTRACT_ADDR, executeMsg, "", funds, fee);
-		let data: PickRewardResponse = JSON.parse(d_decoder.decode(response.data));
-		return data;
-	} catch (error: any) {
-		return { error: error.toString() };
-	}
-}
+// 	try {
+// 		const response = await scrtClient.execute(P_CONTRACT_ADDR, executeMsg, "", funds, fee);
+// 		let data: PickRewardResponse = JSON.parse(d_decoder.decode(response.data));
+// 		return data;
+// 	} catch (error: any) {
+// 		return { error: error.toString() };
+// 	}
+// }

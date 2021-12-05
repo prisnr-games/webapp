@@ -68,6 +68,7 @@ export interface Wallet {
 	get publicAddress(): string;
 	signQueryPermit(): Promise< StdSignature>;
 	execute(p_contract: string, g_msg: JsonObject, g_xfer?: readonly Coin[], g_fee?: StdFee, si_code_hash?: string): Promise<ExecuteResult>
+	query(p_contract: string, g_msg: JsonObject, g_params?: JsonObject, si_code_hash?: string): Promise<JsonObject>;
 }
 
 export interface SecretChainInfo {

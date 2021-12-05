@@ -1,5 +1,5 @@
-import type { CanonicalBasis } from '#/intl/game';
-import type { SemanticQuality } from '#/util/logic';
+import type { CanonicalBasis, CanonicalColor, CanonicalShape } from '#/intl/game';
+import type { SemanticAssertion, SemanticQuality } from '#/util/logic';
 import type { JsonValue } from '#/util/types';
 import type {
 	Coin, JsonObject, StdFee,
@@ -21,8 +21,13 @@ export const P_CONTRACT_ADDR = import.meta.env.VITE_CONTRACT_ADDR;
 /**
  * contract code hash
  */
-export const SI_CONTRACT_CODE_HASH = '5b43fdced88a050872317d65ebe9b7831933dc4133607e069fe93a3bc1a8b381';
+export const SI_CONTRACT_CODE_HASH = import.meta.env.VITE_CONTRACT_CODE_HASH;
 
+export class ContractError extends Error {
+	constructor(s_error: string) {
+		super(`The game contract returned the following error: ${s_error}`);
+	}
+}
 
 /**
  * execution result info
@@ -42,28 +47,32 @@ interface Response {
 	status: String,
 }
 
-interface GameStateResponse {
+export interface GameStateResponse {
 	// 0: waiting for second player, 1: first round, 3: reward round
-	round: number | null,
+	round: 0 | 1 | 3 | null,
+
 	// currently must be default wager "1000000" uscrt
 	wager: string | null,
 
 	// one of "red", "green", "blue", "black"
-	chip_color: string | null,
+	chip_color: CanonicalColor | null,
+
 	// one of "triangle", "square", "circle", "star"
-	chip_shape: string | null,
+	chip_shape: CanonicalShape | null,
 
 	// one of "nobody_has|red", "nobody_has|green", "nobody_has|blue", "nobody_has|black", 
 	//        "nobody_has|triangle", "nobody_has|square", "nobody_has|circle", "nobody_has|star"
-	hint: string | null,
+	hint: `nobody|${SemanticQuality}` | null,
 
 	// one of "nobody_has|red", "nobody_has|green", "nobody_has|blue", "nobody_has|black", 
 	//        "nobody_has|triangle", "nobody_has|square", "nobody_has|circle", "nobody_has|star",
 	//        "i_have|red", "i_have|green", "i_have|blue", "i_have|black",
 	//        "i_have|triangle", "i_have|square", "i_have|circle", "i_have|star"
 	first_submit: string | null,
+
 	// same as above
 	opponent_first_submit: string | null,
+	
 	// one of "red", "green", "blue", "black", "triangle", "square", "circle", "star"
 	//   means that you have learned the secret that opponent has this feature.
 	first_extra_secret: string | null,
@@ -78,6 +87,7 @@ interface GameStateResponse {
 	//    {color} is one of "red", "green", "blue", "black", "" (in case of abstain)
 	//    {shape} is one of "triange", "square", "circle", "star", "" (in case of abstain)
 	guess: string | null,
+	
 	// same as guess
 	opponent_guess: string | null,
 
@@ -161,11 +171,13 @@ const entropyGenerator = (length: number): string => {
 export class GameContract {
 	protected _k_wallet: Wallet;
 	protected _p_contract: string;
+	protected _g_permit: Permit | null;
 	protected _si_code_hash: string | undefined;
 
-	constructor(k_wallet: Wallet, p_contract: string, si_code_hash?: string) {
+	constructor(k_wallet: Wallet, p_contract: string, g_permit?: Permit, si_code_hash?: string) {
 		this._k_wallet = k_wallet;
 		this._p_contract = p_contract;
+		this._g_permit = g_permit || null;
 		this._si_code_hash = si_code_hash;
 	}
 
@@ -214,6 +226,31 @@ export class GameContract {
 			],
 			gas: '40000',
 		});
+	}
+
+	query<Response extends JsonObject>(g_msg: JsonObject): Promise<Response> {
+		if(this._g_permit) {
+			g_msg = {
+				with_permit: {
+					query: g_msg,
+					permit: this._g_permit,
+				},
+			};
+		}
+
+		return this._k_wallet.query(this._p_contract, g_msg);
+	}
+
+	async queryGameState(): Promise<GameStateResponse> {
+		const g_response = await this.query<QueryGameStateResponse>({
+			game_state: {},
+		});
+
+		if(g_response.error) {
+			throw new ContractError(g_response.error);
+		}
+
+		return g_response.game_state!;
 	}
 }
 
@@ -355,37 +392,5 @@ export const executePickReward = async (reward: string): Promise<PickRewardRespo
 		return data;
 	} catch (error: any) {
 		return { error: error.toString() };
-	}
-}
-
-//
-// Query functions of contract
-//
-
-// Query the current game state for the player (about 5 sec turnaround with query permits, so don't spam API with this)
-export const queryGameState = async (
-	permit: Permit,
-): Promise<QueryGameStateResponse> => {
-	const keplr = get(keplrStore);
-	const { keplrEnabled, scrtAuthorized, scrtClient } = keplr;
-	if (!keplrEnabled || !scrtAuthorized) {
-		return { error: "Keplr not enabled" };
-	}
-	let queryMsg: object;
-	if (permit) {
-		queryMsg = {
-			with_permit: {
-				permit,
-				game_state: {}
-			}
-		};
-
-		//console.log(queryMsg);
-		try {
-			const response: QueryGameStateResponse = await scrtClient.queryContractSmart(P_CONTRACT_ADDR, queryMsg, null, SI_CONTRACT_CODE_HASH);
-			return response;
-		} catch (error: any) {
-			return { error: error.toString() };
-		}
 	}
 }

@@ -1,3 +1,10 @@
+export const XTL_SECONDS = 1000;
+export const XTL_MINUTES = 60 * XTL_SECONDS;
+export const XTL_HOURS = 60 * XTL_MINUTES;
+export const XTL_DAYS = 24 * XTL_HOURS;
+export const XTL_WEEKS = 7 * XTL_DAYS;
+export const XTL_MONTHS = 30 * XTL_DAYS;
+export const XTL_YEARS = 365 * XTL_DAYS;
 
 type ReduceParameters<T extends any=any> = Parameters<Array<T>['reduce']>;
 
@@ -59,3 +66,26 @@ export function microtask(): Promise<void> {
 export const proper = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 
+const A_INTERVALS = [
+	{ ge: XTL_YEARS, divisor: XTL_YEARS, unit: 'year' },
+	{ ge: XTL_MONTHS, divisor: XTL_MONTHS, unit: 'month' },
+	{ ge: XTL_WEEKS, divisor: XTL_WEEKS, unit: 'week' },
+	{ ge: XTL_DAYS, divisor: XTL_DAYS, unit: 'day' },
+	{ ge: XTL_HOURS, divisor: XTL_HOURS, unit: 'hour' },
+	{ ge: XTL_MINUTES, divisor: XTL_MINUTES, unit: 'minute' },
+	{ ge: XTL_SECONDS, divisor: XTL_SECONDS, unit: 'seconds' },
+	{ ge: 0, divisor: 1, text: 'just now' },
+];
+
+export function relative_time(z_when: number | Date, z_relative: number | Date=Date.now(), d_rtf=new Intl.RelativeTimeFormat(undefined, {numeric:'auto'})) {
+	const xt_now = typeof z_relative === 'object' ? z_relative.getTime() : new Date(z_relative).getTime();
+	const xtl_diff = xt_now - (typeof z_when === 'object' ? z_when : new Date(z_when)).getTime();
+	const xtl_diff_abs = Math.abs(xtl_diff);
+	for (const g_interval of A_INTERVALS) {
+		if (xtl_diff_abs >= g_interval.ge) {
+			const x_span = Math.round(Math.abs(xtl_diff) / g_interval.divisor);
+			const b_future = xtl_diff < 0;
+			return g_interval.unit ? d_rtf.format(b_future ? x_span : -x_span, g_interval.unit as Intl.RelativeTimeFormatUnit) : g_interval.text;
+		}
+	}
+}

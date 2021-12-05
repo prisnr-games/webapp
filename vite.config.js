@@ -16,12 +16,15 @@ const k_resolver = resolve({
 */
 
 export default defineConfig({
-    plugins: [
+	 plugins: [
 		svelte(),
 	],
-    resolve: {
-        alias: {
-            '#': path.resolve(__dirname, './src'),
-        }
-    },
+	build: {
+		sourcemap: true,
+	},
+	 resolve: {
+		  alias: {
+				'#': path.resolve(__dirname, './src'),
+		  }
+	 },
 })

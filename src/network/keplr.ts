@@ -252,7 +252,11 @@ export class KeplrWallet implements Wallet {
 	}
 
 	execute(p_contract: string, g_msg: JsonObject, g_xfer?: readonly Coin[], g_fee?: StdFee, si_code_hash?: string): Promise<ExecuteResult> {
-		return this._k_client.execute(p_contract, g_msg, '', g_xfer, g_fee);
+		return this._k_client.execute(p_contract, g_msg, '', g_xfer, g_fee, si_code_hash || void 0);
+	}
+
+	query(p_contract: string, g_msg: JsonObject, g_params?: JsonObject, si_code_hash?: string): Promise<JsonObject> {
+		return this._k_client.queryContractSmart(p_contract, g_msg, g_params || {}, si_code_hash || void 0);
 	}
 }
 // async function connectKeplr(chainId: string, secretLcd: string) {
@@ -331,3 +335,4 @@ export class KeplrWallet implements Wallet {
 // 	);
 // 	return signature;
 // }
+

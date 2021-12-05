@@ -19,9 +19,9 @@
 		arbiter(z_text: TextInput, h_widgets?: Widgets): Promise<void>;
 		opponent(a_text: string[], h_widgets?: Widgets): Promise<void>;
 		error(z_text: TextInput, b_fatal?: boolean): Promise<void>;
-		warn(z_text: TextInput): Promise<void>;
+		warn(z_text: TextInput, h_widgets?: Widgets): Promise<void>;
 		wallet(g_addr: AddrInfo): void;
-		permit(g_params: PermitParams): void;
+		permit(g_params: PermitParams, b_restored?: boolean): void;
 		submittable(fk_submit: VoidFunction | null, s_tag?: string): void;
 		unsubmittable(): void;
 	}
@@ -360,11 +360,12 @@
 		}
 	}
 
-	async function warn(z_text: TextInput): Promise<void> {
+	async function warn(z_text: TextInput, h_widgets?: Widgets): Promise<void> {
 		await receive({
 			from: 'System',
 			classes: ['from-system-warn'],
 			text: rerformat_lines(z_text),
+			widgets: h_widgets || {},
 		});
 	}
 
@@ -380,10 +381,10 @@
 	}
 
 	let a_permit_displays: string[] = [];
-	function permit(g_permit: PermitParams): void {
+	function permit(g_permit: PermitParams, b_restored?: boolean): void {
 		const p_token = g_permit.allowed_tokens[0];
 
-		a_permit_displays = [p_token.slice(0, 'secret12345'.length), p_token.slice(-5)];
+		a_permit_displays = [b_restored? 'restored': 'signed', p_token.slice(0, 'secret12345'.length), p_token.slice(-5)];
 	}
 
 	let dt_attempt_last = 0;
@@ -530,7 +531,7 @@
 	}
 
 	.msg-panel {
-		margin-top: 20px;
+		margin-top: 8px;
 		max-width: 800px;
 		margin-left: auto;
 		margin-right: auto;
@@ -696,6 +697,7 @@
 
 		.text {
 			font-size: 22px;
+			white-space: pre-wrap;
 		}
 	
 		.cursor {
@@ -789,10 +791,10 @@
 				<span class="msg-nav-group" transition:fade={{duration:1000}}>
 					<span class="msg-nav-icon"><Fa icon={faTicketAlt}/></span>
 					<span class="msg-nav-permit inline-flex">
-						<span class="prefix">signed:</span>
-						<span class="addr">{a_permit_displays[0]}</span>
-						<span class="ellipsis">...</span>
+						<span class="prefix">{a_permit_displays[0]}:</span>
 						<span class="addr">{a_permit_displays[1]}</span>
+						<span class="ellipsis">...</span>
+						<span class="addr">{a_permit_displays[2]}</span>
 					</span>
 				</span>
 			{/if}

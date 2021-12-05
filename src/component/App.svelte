@@ -17,6 +17,7 @@
 
 	import {
 		blur,
+		fade,
 	} from 'svelte/transition';
 
 	import {
@@ -27,6 +28,8 @@
 
 	import {
 		faClock,
+		faVolumeUp,
+		faVolumeMute,
 	} from '@fortawesome/free-solid-svg-icons';
 
 	import fingerprintjs from '@fingerprintjs/fingerprintjs';
@@ -64,16 +67,23 @@
 
 	import {
 		dd,
+		delete_cookie,
+		qs,
 		read_cookie,
 		write_cookie,
 	} from '#/util/dom';
 
 	import {
+		XTL_SECONDS,
+		XTL_MINUTES,
+		XTL_HOURS,
+		XTL_DAYS,
 		microtask,
 		ode,
 		oder,
 		proper,
 		timeout,
+relative_time,
 	} from '#/util/belt';
 
 	import {
@@ -101,19 +111,19 @@
 	} from '#/network/permits';
 
 	import {
-ContractExecInfo,
-GameContract,
+		ContractError,
+		ContractExecInfo,
+		GameContract,
+		GameStateResponse,
 		JoinResponse,
 		P_CONTRACT_ADDR,
-SI_CONTRACT_CODE_HASH,
+		QueryGameStateResponse,
+		SI_CONTRACT_CODE_HASH,
 	} from '#/network/contract';
 
 	import {
 		EncryptedLocalStorage,
 	} from '#/util/encrypted-local-storage';
-
-	const XT_SECONDS = 1000;
-	const XTL_MINUTES = 60 * XT_SECONDS;
 
 
 	/**
@@ -178,6 +188,16 @@ SI_CONTRACT_CODE_HASH,
 	 */
 	let k_wallet: Wallet;
 
+	
+	// preload images
+	// {
+		const d_img_monster = new Image();
+		d_img_monster.src = '/asset/monster.png';
+
+		const d_img_smile = new Image()
+		d_img_smile.src = '/asset/smile.png';
+	// }
+
 	async function reveal_prepared(si_which: string) {
 		// loading messages
 		for(const g_msg of H_MESSAGES[si_which]) {
@@ -218,7 +238,7 @@ SI_CONTRACT_CODE_HASH,
 		await k_panel.reveal_text('');
 	}
 
-	async function reload(): Promise<void> {
+	async function reload(): Promise<never> {
 		// button to reload the page
 		await k_prompt.ok('Reload');
 
@@ -229,12 +249,34 @@ SI_CONTRACT_CODE_HASH,
 		return new Promise(() => {});
 	}
 
-	async function fatal(s_text: string): Promise<void> {
+	async function fatal(s_text: string): Promise<never> {
 		// show error
 		await k_panel.error(s_text);
 
 		// show button to reload
 		return reload();
+	}
+
+	async function surprise() {
+		// play transition
+		const s_suspense = '                                 ';
+		await k_panel.reveal_text(s_suspense);
+
+		H_AUDIO.epic_transition.play();
+		
+		void k_panel.reveal_text(s_suspense+'  ', 250);
+
+		dm_surprise.classList.add('triggered')
+		await timeout(160);
+		dm_surprise.style.opacity = '0.0';
+
+		// disable surprise display
+		setTimeout(() => {
+			dm_surprise.style.display = 'none';
+		}, 6e3);
+
+		// allow surprise to settle
+		await timeout(4500);
 	}
 
 	async function connect_wallet(n_retries=0): Promise<void> {
@@ -316,61 +358,74 @@ SI_CONTRACT_CODE_HASH,
 		// clear text
 		k_panel.reveal_text('');
 
-		// prepare for wallet connection
-		await k_panel.warn(`
-			This is a multiplayer, online game that uses smart contracts on the Secret Network to ensure fairness for all players.
+		// wallet not yet connected
+		if(!k_wallet) {
+			// prepare for wallet connection
+			await k_panel.warn(`
+				This is a multiplayer, online game that uses smart contracts on the Secret Network to ensure fairness for all players.
 
-			Interacting with the game requires submitting transactions to the blockchain via a web wallet such as Keplr (or a local wallet for testnet only).
-		`);
+				Interacting with the game requires submitting transactions to the blockchain via a web wallet such as Keplr (or a local wallet for testnet only).
+			`);
 
-		// pause for effect
-		await timeout(600);
+			// pause for effect
+			await timeout(600);
 
-		// wait for response
-		const si_opt = await k_prompt.opts({
-			keplr: KeplrWallet.isAvailable()? {
-				label: 'Connect Keplr',
-				alt: `Connect a wallet using the Keplr extension for Chrome`,
-			}: {
-				label: 'Install Keplr',
-				alt: `Keplr was not detected. Please install it first in order to use this option`,
-			},
-			local: {
-				label: 'Use Local Storage',
-				alt: `Creates a wallet in your browser's local storage for a better user experience on testnet`,
-			},
-		});
+			// wait for response
+			const si_opt = await k_prompt.opts({
+				keplr: KeplrWallet.isAvailable()? {
+					label: 'Connect Keplr',
+					alt: `Connect a wallet using the Keplr extension for Chrome`,
+				}: {
+					label: 'Install Keplr',
+					alt: `Keplr was not detected. Please install it first in order to use this option`,
+				},
+				local: {
+					label: 'Use Local Storage',
+					alt: `Creates a wallet in your browser's local storage for a better user experience on testnet`,
+				},
+			});
 
-		// connect to wallet
-		switch(si_opt) {
-			// use keplr
-			case 'keplr': {
-				// try to instantiate
-				try {
-					k_wallet = KeplrWallet.fromWindow();
+			// connect to wallet
+			switch(si_opt) {
+				// use keplr
+				case 'keplr': {
+					// try to instantiate
+					try {
+						k_wallet = KeplrWallet.fromWindow();
+					}
+					// could keplr is not installed
+					catch(e_keplr) {
+						// open keplr in new tab
+						window.open('https://www.keplr.app/', '_blank');
+
+						// show button to reload
+						return await reload();
+					}
+
+					// save
+					write_cookie({
+						wallet: 'keplr',
+					}, 30*XTL_DAYS);
+
+					break;
 				}
-				// could keplr is not installed
-				catch(e_keplr) {
-					// open keplr in new tab
-					window.open('https://www.keplr.app/', '_blank');
 
-					// show button to reload
-					return await reload();
+				// local storage
+				case 'local': {
+					return fatal(`Local storage wallet not yet implemented`);
+
+					// // save
+					// write_cookie({
+					// 	wallet: 'local',
+					// }, 30*XTL_DAYS);
 				}
 
-				break;
+				// other
+				default: {
+					return fatal(`Unhandled response option: '${si_opt}'`);
+				}
 			}
-
-			// local storage
-			case 'local': {
-				return fatal(`Local storage wallet not yet implemented`);
-			}
-
-			// other
-			default: {
-				return fatal(`Unhandled response option: '${si_opt}'`);
-			}
-		}
+	}
 
 		// if the chain was added in response to the suggestion
 		let b_added = false;
@@ -446,9 +501,14 @@ SI_CONTRACT_CODE_HASH,
 
 		await timeout(1000);
 
+		let b_restored_permit = false;
+
 		// permit exists for this contract
 		if(h_permits && h_permits[P_CONTRACT_ADDR]) {
 			g_permit = h_permits[P_CONTRACT_ADDR];
+
+			// restored permit
+			b_restored_permit = true;
 		}
 		// permit does not exist for this contract
 		else {
@@ -488,7 +548,7 @@ SI_CONTRACT_CODE_HASH,
 			}
 		}
 
-		k_panel.permit(g_permit.params);
+		k_panel.permit(g_permit.params, b_restored_permit);
 
 		await timeout(1200);
 
@@ -498,17 +558,129 @@ SI_CONTRACT_CODE_HASH,
 		await timeout(1100);
 	}
 
-	onMount(async() => {
-		// read cookie
-		let h_cookie = read_cookie();
+	async function wait_for_other_player(b_resume=false): Promise<GameStateResponse> {
+		let yw_checked = writable('');
 
+		if(b_resume) {
+			k_panel.warn(`Still waiting for another player... {last_check}`, {
+				last_check: yw_checked,
+			});
+		}
+		else {
+			// TODO: notifications and bell sound
+			k_panel.warn(`Created a new game. Now waiting for another player... {last_check}`, {
+				last_check: yw_checked,
+			});
+		}
+
+		let xt_checked = Date.now();
+		let i_checking = setInterval(() => {
+			if(xt_checked) {
+				yw_checked.set(`Last checked ${relative_time(xt_checked)}`);
+			}
+		}, 1000);
+
+		// start querying for game state
+		let g_game_query: GameStateResponse;
+		let xt_prev: number;
+		for(;;) {
+			xt_prev = Date.now();
+			try {
+				g_game_query = (await k_game.queryGameState());
+			}
+			catch(e_query: unknown) {
+				if(e_query instanceof ContractError) {
+					return fatal(e_query.message);
+				}
+				else {
+					return fatal(e_query+'');
+				}
+			}
+
+			if(0 !== g_game_query.round) {
+				break;
+			}
+
+			xt_checked = Date.now();
+
+			// query at most every 10 seconds
+			const xtl_diff = Date.now() - xt_prev;
+			if(xtl_diff < 10*XTL_SECONDS) {
+				await timeout(xtl_diff);
+			}
+		}
+
+		// stop checking
+		clearInterval(i_checking);
+
+		// clear last checked widget text
+		yw_checked.set('');
+
+		return g_game_query;
+	}
+
+	// audio
+	const H_AUDIO = Object.fromEntries(ode({
+		epic_transition: 'epic-transition.wav',
+		coin_win: 'coin-win.wav',
+		retro_game_alarm: 'retro-game-alarm.wav',
+		retro_game_notif: 'retro-game-notif.wav',
+		trumpet_fanfare: 'trumpet-fanfare.wav',
+	}).map(([si_key, sr_asset]) => [si_key, new Audio(`/asset/${sr_asset}`)]));
+
+	// muted
+	let b_muted = false;
+
+	// read cookie
+	let h_cookie = read_cookie();
+
+	// game
+	let k_game: GameContract;
+
+
+	$: {
+		if(h_cookie) {
+			// set audio
+			Object.values(H_AUDIO).forEach(d => d.muted = b_muted);
+
+			// save setting
+			write_cookie({
+				muted: b_muted? '1': '0',
+			}, 30*XTL_DAYS);
+		}
+	}
+
+	let b_surprise = false;
+	let dm_surprise: HTMLElement;
+
+	onMount(async() => {
 		// ref last seen value
-		let s_last_seen = h_cookie.last_seen;
+		const s_last_seen = h_cookie.last_seen;
+		const xt_last_seen = +s_last_seen;
+
+		// user has been seen before
+		if(s_last_seen) {
+			// update muted value
+			b_muted = !!(+h_cookie.muted);
+		}
+
+		// wallet was previously connected
+		if('keplr' === h_cookie.wallet) {
+			// try to instantiate
+			try {
+				k_wallet = KeplrWallet.fromWindow();
+			}
+			// could keplr is not installed
+			catch(e_keplr) {
+				// clear setting
+				delete_cookie('wallet');
+			}
+		}
 
 		// set last seen value, expires in 30 days
 		write_cookie({
 			last_seen: ''+Date.now(),
-		}, 60*60*24*30);
+		}, 30*XTL_DAYS);
 
 		// re-read cookie
 		h_cookie = read_cookie();
@@ -516,9 +688,60 @@ SI_CONTRACT_CODE_HASH,
 		// connect wallet
 		await connect_wallet();
 
+		// instantiate game contract
+		k_game = new GameContract(k_wallet, P_CONTRACT_ADDR, g_permit);
 
-		// hasn't seen introduction yet; run introduction
+		// a game was started
+		if(h_cookie.game) {
+			// check
+			const s_checking = 'checking for active game... ';
+
+			await k_panel.reveal_text(s_checking);
+
+			const A_SPIN = ['◜ ◝', ' ˉ◞', ' ˍ◝', '◟ ◞', '◜ˍ ', '◟ˉ '];
+			let i_spin = 0;
+			const i_interval = setInterval(() => {
+				k_panel.reveal_text(s_checking+A_SPIN[i_spin++]+' ', 5);
+				i_spin %= A_SPIN.length;
+			}, 200);
+
+			// check for active game
+			let g_game_contd!: GameStateResponse | undefined;
+			try {
+				g_game_contd = await k_game.queryGameState();
+			}
+			catch(e_query) {
+				debugger;
+			}
+			finally {
+				clearInterval(i_interval);
+
+				// clear
+				k_panel.reveal_text('');
+			}
+
+			// continue game
+			if(g_game_contd) {
+				k_panel.warn(`Successfully resumed active game.`);
+
+				let g_game: GameStateResponse = g_game_contd;
+
+				if(0 === g_game_contd.round) {
+					g_game = await wait_for_other_player(true);
+				}
+
+				if(1 === g_game.round) {
+					return round_1(g_game);
+				}
+			}
+		}
+
+		// new user or late returning
 		if(!s_last_seen) {
+			// surprise >:)
+			await surprise();
+
+			// run introduction
 			await introduction();
 		}
 		// returning; welcome back
@@ -549,9 +772,6 @@ SI_CONTRACT_CODE_HASH,
 		// clear prompt
 		void k_panel.reveal_text('');
 
-		// instantiate game contract
-		const k_game = new GameContract(k_wallet, P_CONTRACT_ADDR, SI_CONTRACT_CODE_HASH);
-
 		// attempt to join
 		let g_join: ContractExecInfo<JoinResponse>;
 		try {
@@ -566,6 +786,14 @@ SI_CONTRACT_CODE_HASH,
 				// no scrt
 				if(/Account does not exist/.test(se_join)) {
 					return fatal(`Looks like your wallet is empty. Make sure to acquire some SCRT tokens so that you pay the gas fees for transactions.`);
+				}
+				// already in active game
+				else if(/must finish current game/.test(se_join)) {
+					write_cookie({
+						game: 'started',
+					}, 12*XTL_HOURS);
+
+					return fatal(`Looks like you changed browsers since you last joined a game with this account. Please reload and the game will attempt to resume.`);
 				}
 				// unhandled
 				else {
@@ -592,25 +820,39 @@ SI_CONTRACT_CODE_HASH,
 
 		// 
 		const g_game_join = g_res_join?.game_state;
+		let g_game = g_game_join!;
 
 		// must wait for another player
 		if(g_game_join?.round) {
-			// TODO: notifications and bell sound
-			k_panel.warn(`Created a new game. Now waiting for another player...`);
+			// record that a game was started
+			write_cookie({
+				game: 'started',
+			}, 12*XTL_HOURS);
+
+			// wait for other player
+			g_game = await wait_for_other_player();
 		}
-		// ready to play
-		else {
 
+		// ready to play round 1
+		if(1 === g_game.round) {
+			return round_1(g_game);
 		}
+	});
 
 
-		si_player_color = Object.keys(H_COLORS)[Math.floor(Math.random() * 4)] as CanonicalColor;
-		si_player_shape = Object.keys(H_SHAPES)[Math.floor(Math.random() * 4)] as CanonicalShape;
+	async function round_1(g_game: GameStateResponse): Promise<void> {
+		debugger;
+		si_player_color = g_game.chip_color!;
+		si_player_shape = g_game.chip_shape!;
+		si_player_hint = g_game.hint?.split('|')[1] as SemanticQuality;
 
-		si_player_hint = [
-			...Object.keys(H_COLORS).map(s => `color:${s}` as SemanticColorQuality),
-			...Object.keys(H_SHAPES).map(s => `shape:${s}` as SemanticShapeQuality),
-		][Math.floor(Math.random() * 4)];
+		// si_player_color = Object.keys(H_COLORS)[Math.floor(Math.random() * 4)] as CanonicalColor;
+		// si_player_shape = Object.keys(H_SHAPES)[Math.floor(Math.random() * 4)] as CanonicalShape;
+
+		// si_player_hint = [
+		// 	...Object.keys(H_COLORS).map(s => `color:${s}` as SemanticColorQuality),
+		// 	...Object.keys(H_SHAPES).map(s => `shape:${s}` as SemanticShapeQuality),
+		// ][Math.floor(Math.random() * 4)];
 
 		// clear
 		await k_panel.reveal_text('');
@@ -638,7 +880,7 @@ SI_CONTRACT_CODE_HASH,
 
 		setInterval(() => {
 			const xtl_diff = xt_eta - Date.now();
-			const n_secs = Math.max(0, Math.floor(xtl_diff / XT_SECONDS));
+			const n_secs = Math.max(0, Math.floor(xtl_diff / XTL_SECONDS));
 			const n_mins = Math.floor(n_secs / 60);
 			yw_time.set(`${n_mins}m ${(''+(n_secs % 60)).padStart(2, '0')}s`)
 		}, 100);
@@ -721,7 +963,7 @@ SI_CONTRACT_CODE_HASH,
 				premise: dm_premise,
 			});
 		}
-	});
+	}
 
 	let si_assert_basis: CanonicalBasis = A_BASES[0];
 	let si_assert_quality: SemanticQuality | '' = '';
@@ -791,6 +1033,8 @@ SI_CONTRACT_CODE_HASH,
 </script>
 
 <style lang="less">
+	@import './common.less';
+
 	.container {
 		position: relative;
 	}
@@ -821,11 +1065,73 @@ SI_CONTRACT_CODE_HASH,
 			}
 		}
 	}
+
+	.system-controls {
+		max-width: 800px;
+		margin-left: auto;
+		margin-right: auto;
+		margin-top: 4px;
+
+		.system-controls-audio {
+			cursor: pointer;
+			color: fade(white, 70%);
+		}
+	}
+
+	@keyframes surprise {
+		0% {
+			visibility: visible;
+		}
+		33% {
+			visibility: hidden;
+		}
+		66% {
+			visibility: hidden;
+		}
+		100% {
+			visibility: visible;
+		}
+	}
+
+	.surprise {
+		width: 100%;
+		margin-top: -300px;
+		position: fixed;
+		z-index: 2;
+		visibility: visible;
+		transition: opacity 3s @ease-out-expo;
+		opacity: 1.0;
+		pointer-events: none;
+
+		img {
+			width: 100%;
+		}
+
+		&:not(.triggered) {
+			visibility: hidden;
+		}
+	}
+
+	:global(.triggered) {
+		animation: surprise 100ms steps(4, jump-none) 2;
+	}
+
 </style>
+
+<div class="system-controls">
+	<span class="system-controls-audio" alt="audio" on:click={() => b_muted = !b_muted}>
+		<Fa icon={b_muted? faVolumeMute: faVolumeUp} />
+	</span>
+</div>
 
 <MessagePanel bind:k_panel>
 	
 </MessagePanel>
+
+
+<div class="surprise" bind:this={dm_surprise}>
+	<img src="/asset/smile.png" alt="evil smile" />
+</div>
 
 <div class="container">
 	<Prompt bind:k_prompt>
@@ -853,4 +1159,5 @@ SI_CONTRACT_CODE_HASH,
 	<Scene bind:k_scene>
 
 	</Scene>
+
 </div>

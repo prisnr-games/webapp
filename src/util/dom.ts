@@ -119,3 +119,9 @@ export function write_cookie(h_cookie: Record<string, string>, xt_expires: numbe
 		.map(([si_key, s_value]) => `${si_key}=${s_value}`)
 		.join('; ');
 }
+
+export function delete_cookie(si_cookie: string) {
+	return write_cookie({
+		[si_cookie]: '',
+	}, 0);
+}

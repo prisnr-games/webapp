@@ -1,5 +1,5 @@
 import type { CanonicalBasis, CanonicalColor, CanonicalShape } from '#/intl/game';
-import type { SemanticAssertion, SemanticQuality } from '#/util/logic';
+import type { SemanticAssertion, SemanticColorQuality, SemanticQuality, SemanticShapeQuality } from '#/util/logic';
 import type { JsonValue } from '#/util/types';
 import type {
 	Coin, JsonObject, StdFee,
@@ -55,10 +55,10 @@ export interface GameStateResponse {
 	wager: string | null,
 
 	// one of "red", "green", "blue", "black"
-	chip_color: CanonicalColor | null,
+	chip_color: SemanticColorQuality | null,
 
 	// one of "triangle", "square", "circle", "star"
-	chip_shape: CanonicalShape | null,
+	chip_shape: SemanticShapeQuality | null,
 
 	// one of "nobody_has|red", "nobody_has|green", "nobody_has|blue", "nobody_has|black", 
 	//        "nobody_has|triangle", "nobody_has|square", "nobody_has|circle", "nobody_has|star"

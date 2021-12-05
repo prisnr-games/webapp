@@ -252,6 +252,9 @@ import ActionWidget from './ActionWidget.svelte';
 	}
 
 	async function fatal(s_text: string): Promise<never> {
+		// clear console message
+		k_panel.reveal_text('');
+
 		// show error
 		await k_panel.error(s_text);
 
@@ -278,7 +281,7 @@ import ActionWidget from './ActionWidget.svelte';
 		}, 6e3);
 
 		// allow surprise to settle
-		await timeout(4500);
+		await timeout(2500);
 	}
 
 	async function connect_wallet(n_retries=0): Promise<void> {
@@ -658,6 +661,17 @@ import ActionWidget from './ActionWidget.svelte';
 		return g_game_query;
 	}
 
+	const A_SPIN = ['◜ ◝', ' ˉ◞', ' ˍ◝', '◟ ◞', '◜ˍ ', '◟ˉ '];
+	async function spinner(s_loading: string): Promise<number> {
+		await k_panel.reveal_text(s_loading+' ');
+
+		let i_spin = 0;
+		return window.setInterval(() => {
+			k_panel.reveal_text(s_loading+' '+A_SPIN[i_spin++]+' ', 5);
+			i_spin %= A_SPIN.length;
+		}, 200);
+	}
+
 	// audio
 	const H_AUDIO_SRC = {
 		epic_transition: 'epic-transition.wav',
@@ -734,17 +748,7 @@ import ActionWidget from './ActionWidget.svelte';
 
 		// a game was started
 		if(h_cookie.game) {
-			// check
-			const s_checking = 'checking for active game... ';
-
-			await k_panel.reveal_text(s_checking);
-
-			const A_SPIN = ['◜ ◝', ' ˉ◞', ' ˍ◝', '◟ ◞', '◜ˍ ', '◟ˉ '];
-			let i_spin = 0;
-			const i_interval = setInterval(() => {
-				k_panel.reveal_text(s_checking+A_SPIN[i_spin++]+' ', 5);
-				i_spin %= A_SPIN.length;
-			}, 200);
+			const i_spinning = await spinner('checking for active game...');
 
 			// check for active game
 			let g_game_contd!: GameStateResponse | undefined;
@@ -755,7 +759,7 @@ import ActionWidget from './ActionWidget.svelte';
 				debugger;
 			}
 			finally {
-				clearInterval(i_interval);
+				clearInterval(i_spinning);
 
 				// clear
 				k_panel.reveal_text('');
@@ -772,7 +776,7 @@ import ActionWidget from './ActionWidget.svelte';
 				}
 
 				if(1 === g_game.round) {
-					return round_1(g_game);
+					return round_1(g_game, true);
 				}
 			}
 		}
@@ -810,8 +814,11 @@ import ActionWidget from './ActionWidget.svelte';
 		// join a game
 		await k_prompt.ok('Join a game');
 
-		// clear prompt
-		void k_panel.reveal_text('');
+		// while transaction is verified
+		let i_spinning = 0;
+		
+		// wait
+		spinner('waiting for transaction to be verified... ').then(i => i_spinning = i);
 
 		// attempt to join
 		let g_join: ContractExecInfo<JoinResponse>;
@@ -820,6 +827,8 @@ import ActionWidget from './ActionWidget.svelte';
 		}
 		// failed
 		catch(e_join: unknown) {
+			clearInterval(i_spinning);
+
 			// error
 			if(e_join instanceof Error) {
 				const se_join = e_join.message;
@@ -836,6 +845,10 @@ import ActionWidget from './ActionWidget.svelte';
 
 					return fatal(`Looks like you changed browsers since you last joined a game with this account. Please reload and the game will attempt to resume.`);
 				}
+				// contract not found
+				else if(/contract not found/i.test(se_join)) {
+					return fatal(`Contract not found! Are you on the right network?`);
+				}
 				// unhandled
 				else {
 					debugger;
@@ -847,6 +860,12 @@ import ActionWidget from './ActionWidget.svelte';
 				return fatal(`Unknown error: ${e_join}`);
 			}
 		}
+
+		clearInterval(i_spinning);
+
+		// clear prompt
+		k_panel.reveal_text('');
+
 
 		// destructure join results
 		const {
@@ -881,10 +900,9 @@ import ActionWidget from './ActionWidget.svelte';
 	});
 
 
-	async function round_1(g_game: GameStateResponse): Promise<void> {
-		debugger;
-		si_player_color = g_game.chip_color!;
-		si_player_shape = g_game.chip_shape!;
+	async function round_1(g_game: GameStateResponse, b_resumed=false): Promise<void> {
+		si_player_color = g_game.chip_color!.split(':')[1] as CanonicalColor;
+		si_player_shape = g_game.chip_shape!.split(':')[1] as CanonicalShape;
 		si_player_hint = g_game.hint?.split('|')[1] as SemanticQuality;
 
 		// clear
@@ -896,7 +914,7 @@ import ActionWidget from './ActionWidget.svelte';
 		// animate chip
 		await k_scene.animate_chip_entry(si_player_color, si_player_shape);
 
-		await timeout(5e3);
+		if(!b_resumed) await timeout(5e3);
 
 		let b_hint_color = si_player_hint.startsWith('color:');
 
@@ -906,7 +924,7 @@ import ActionWidget from './ActionWidget.svelte';
 			I've also given your opponent a hint. Theirs is that nobody has a certain ${b_hint_color? 'shape': 'color'}.
 		`);
 
-		await timeout(4.1e3);
+		if(!b_resumed) await timeout(4.1e3);
 
 		const xt_eta = Date.now() + (10 * XTL_MINUTES);
 		const yw_time = writable('10m 00s');
@@ -945,7 +963,7 @@ import ActionWidget from './ActionWidget.svelte';
 			// show transmission controls
 			await k_tx.show();
 
-			await timeout(4e3);
+			if(!b_resumed) await timeout(4e3);
 
 			// reveal transmission buttons
 			reveal_tx();
@@ -967,7 +985,7 @@ import ActionWidget from './ActionWidget.svelte';
 			// premise dom
 			const dm_premise = dd('span');
 
-			// render premise wiidget
+			// render premise widget
 			const yc_premise = new PremiseWidget({
 				target: dm_premise,
 				props: {

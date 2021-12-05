@@ -89,12 +89,12 @@ interface Basis {
 }
 
 export const H_BASES = {
-	nobody: {
+	nobody_has: {
 		describe: {
 			en: (s: string) => `nobody has ${s || '...'}`,
 		},
 	},
-	mine: {
+	i_have: {
 		describe: {
 			en: (s: string) => `my chip is ${s || '...'}`,
 		},

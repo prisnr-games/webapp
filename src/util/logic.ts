@@ -14,6 +14,8 @@ export type SemanticShapeQuality = `shape:${CanonicalShape}`;
 
 export type SemanticQuality = SemanticColorQuality | SemanticShapeQuality;
 
+export type SemanticAssertion_Nobody = `nobody_has|${SemanticQuality}`;
+export type SemanticAssertion_Mine = `i_have|${SemanticQuality}`;
 export type SemanticAssertion = `${CanonicalBasis}|${SemanticQuality}`;
 
 // export type QualityMask = number & {}

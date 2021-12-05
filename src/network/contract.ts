@@ -1,5 +1,5 @@
 import type { CanonicalBasis, CanonicalColor, CanonicalShape } from '#/intl/game';
-import type { SemanticAssertion, SemanticColorQuality, SemanticQuality, SemanticShapeQuality } from '#/util/logic';
+import type { SemanticAssertion, SemanticAssertion_Nobody, SemanticColorQuality, SemanticQuality, SemanticShapeQuality } from '#/util/logic';
 import type { JsonValue } from '#/util/types';
 import type {
 	Coin, JsonObject, StdFee,
@@ -62,25 +62,25 @@ export interface GameStateResponse {
 
 	// one of "nobody_has|red", "nobody_has|green", "nobody_has|blue", "nobody_has|black", 
 	//        "nobody_has|triangle", "nobody_has|square", "nobody_has|circle", "nobody_has|star"
-	hint: `nobody|${SemanticQuality}` | null,
+	hint: SemanticAssertion_Nobody | null,
 
 	// one of "nobody_has|red", "nobody_has|green", "nobody_has|blue", "nobody_has|black", 
 	//        "nobody_has|triangle", "nobody_has|square", "nobody_has|circle", "nobody_has|star",
 	//        "i_have|red", "i_have|green", "i_have|blue", "i_have|black",
 	//        "i_have|triangle", "i_have|square", "i_have|circle", "i_have|star"
-	first_submit: string | null,
+	first_submit: SemanticAssertion | null,
 
 	// same as above
-	opponent_first_submit: string | null,
+	opponent_first_submit: SemanticAssertion | null,
 	
 	// one of "red", "green", "blue", "black", "triangle", "square", "circle", "star"
 	//   means that you have learned the secret that opponent has this feature.
-	first_extra_secret: string | null,
+	first_extra_secret: SemanticAssertion | null,
 
 	// next three same as first submit/secret
-	second_submit: string | null,
-	opponent_second_submit: string | null,
-	second_extra_secret: string | null,
+	second_submit: SemanticAssertion | null,
+	opponent_second_submit: SemanticAssertion | null,
+	second_extra_secret: SemanticAssertion | null,
 
 	// has format "{target}|{color}|{shape}", where
 	//    {target} is one of "abstain", "bag", "opponent"

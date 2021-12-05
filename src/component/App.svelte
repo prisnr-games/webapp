@@ -120,6 +120,7 @@ relative_time,
 		P_CONTRACT_ADDR,
 		QueryGameStateResponse,
 		SI_CONTRACT_CODE_HASH,
+SubmitResponse,
 	} from '#/network/contract';
 
 	import {
@@ -776,7 +777,7 @@ import ActionWidget from './ActionWidget.svelte';
 				}
 
 				if(1 === g_game.round) {
-					return round_1(g_game, true);
+					return round_1a(g_game, true);
 				}
 			}
 		}
@@ -895,12 +896,14 @@ import ActionWidget from './ActionWidget.svelte';
 
 		// ready to play round 1
 		if(1 === g_game.round) {
-			return round_1(g_game);
+			return round_1a(g_game);
 		}
 	});
 
 
-	async function round_1(g_game: GameStateResponse, b_resumed=false): Promise<void> {
+	let i_timer_1a = 0;
+
+	async function round_1a(g_game: GameStateResponse, b_resumed=false): Promise<void> {
 		si_player_color = g_game.chip_color!.split(':')[1] as CanonicalColor;
 		si_player_shape = g_game.chip_shape!.split(':')[1] as CanonicalShape;
 		si_player_hint = g_game.hint?.split('|')[1] as SemanticQuality;
@@ -929,45 +932,230 @@ import ActionWidget from './ActionWidget.svelte';
 		const xt_eta = Date.now() + (10 * XTL_MINUTES);
 		const yw_time = writable('10m 00s');
 
-		setInterval(() => {
+		i_timer_1a = window.setInterval(() => {
 			const xtl_diff = xt_eta - Date.now();
 			const n_secs = Math.max(0, Math.floor(xtl_diff / XTL_SECONDS));
 			const n_mins = Math.floor(n_secs / 60);
 			yw_time.set(`${n_mins}m ${(''+(n_secs % 60)).padStart(2, '0')}s`)
 		}, 100);
 
-		// round 1
-		{
-			// render clock icon
-			const dm_clock = dd('span');
+		// render clock icon
+		const dm_clock = dd('span');
 
-			Object.assign(dm_clock.style, {
-				paddingRight: '2px',
-			});
+		Object.assign(dm_clock.style, {
+			paddingRight: '2px',
+		});
 
-			new Fa({
-				target: dm_clock,
-				props: {
-					icon: faClock,
-				},
-			});
+		new Fa({
+			target: dm_clock,
+			props: {
+				icon: faClock,
+			},
+		});
 
-			// final instructions
-			await k_panel.arbiter([
-				'Now you must choose what to tell the other player. I will reveal both of your messages simultaneously once they both have been submitted. You have {clock_icon}{time_remaining} remaining.',
-			], {
-				clock_icon: dm_clock,
-				time_remaining: yw_time,
-			});
+		// final instructions
+		await k_panel.arbiter([
+			'Now you must choose what to tell the other player. I will reveal both of your messages simultaneously once they both have been submitted. You have {clock_icon}{time_remaining} remaining.',
+		], {
+			clock_icon: dm_clock,
+			time_remaining: yw_time,
+		});
 
-			// show transmission controls
-			await k_tx.show();
+		// show transmission controls
+		await k_tx.show();
 
-			if(!b_resumed) await timeout(4e3);
+		if(!b_resumed) await timeout(4e3);
 
-			// reveal transmission buttons
-			reveal_tx();
+		// reveal transmission buttons
+		reveal_tx();
+	}
+
+	let si_assert_basis: CanonicalBasis = A_BASES[0];
+	let si_assert_quality: SemanticQuality | '' = '';
+
+	async function reveal_tx(): Promise<void> {
+		const s_what = si_assert_quality? use_quality_in_sentence(si_assert_quality): '';
+
+		const s_reveal = H_BASES[si_assert_basis].describe[s_lang](s_what);
+
+		await k_panel.reveal_text(s_reveal);
+	}
+
+	function select_basis(g_evt: CustomEvent<CanonicalBasis>) {
+		k_panel.submittable(null);
+
+		si_assert_basis = g_evt.detail;
+
+		si_assert_quality = '';
+
+		reveal_tx();
+	}
+
+	// reset transmission controls after recovering from an error
+	function reset_tx() {
+		// reset quality
+		si_assert_quality = '';
+
+		// show submit button
+		k_panel.submittable(null);
+
+		// show transmission controls
+		k_tx.show();
+
+		// reveal basis
+		reveal_tx();
+	}
+
+	async function select_quality(g_evt: CustomEvent<SemanticQuality>) {
+		k_panel.submittable(null);
+
+		si_assert_quality = g_evt.detail;
+
+		const [si_attr, s_value] = si_assert_quality.split(':');
+
+		// create evaluation tag
+		let s_tag = 'Unknowable';
+		if('nobody_has' === si_assert_basis) {
+			if(si_player_hint === si_assert_quality) {
+				s_tag = 'Truth';
+			}
+			else {
+				if(('color' === si_attr && s_value === si_player_color)
+					|| ('shape' === si_attr && s_value === si_player_shape)
+				) {
+					s_tag = 'Lie';
+				}
+			}
 		}
+		else {
+			if(('color' === si_attr && s_value === si_player_color)
+				|| ('shape' === si_attr && s_value === si_player_shape)
+			) {
+				s_tag = 'Truth';
+			}
+			else {
+				s_tag = 'Lie';
+			}
+		}
+
+		// display assertion
+		await reveal_tx();
+
+		// enable option to submit
+		k_panel.submittable(async() => {
+			// hide transmission controls
+			k_tx.hide();
+
+			// lock submit buttono
+			k_panel.submittable(null);
+
+			// submit assertion
+			let g_response: ContractExecInfo<SubmitResponse>;
+			try {
+				g_response = await k_game.submitAssertion(si_assert_basis, si_assert_quality as SemanticQuality);
+			}
+			catch(e_submit: unknown) {
+				if(e_submit instanceof Error) {
+					const se_submit = e_submit.message;
+
+					if(/execute contract failed/.test(se_submit)) {
+						k_panel.error(`Contract error: ${se_submit}`);
+					}
+					else if(/Request rejected/.test(se_submit)) {
+						k_panel.error(`Transaction rejected`);
+					}
+					else {
+						k_panel.error(`Unhandled error: ${e_submit.stack}`);
+					}
+				}
+				else {
+					k_panel.error(`Unknown error: ${e_submit}`);
+				}
+
+				// reset
+				return reset_tx();
+			}
+
+			// destructure responose
+			const {
+				data: g_data,
+			} = g_response;
+
+			// contract error
+			if(g_data.error) {
+				k_panel.error(`Contract error: ${g_data.error}`);
+				
+				// reset
+				return reset_tx();
+			}
+
+			// remove submission button
+			k_panel.unsubmittable();
+
+			// commit text to message history
+			k_panel.commit();
+
+			// proceed to next state
+			round_1b(g_data.submit?.game_state!);
+		}, s_tag);
+	}
+
+	let b_notif_1b_waiting = false;
+	let i_timer_1b = 0;
+
+	async function round_1b(g_game: GameStateResponse): Promise<void> {
+		// 
+		const {
+			opponent_first_submit: si_opponent_assertion,
+			first_extra_secret: si_opponent_secret,
+		} = g_game;
+
+		// still waiting on othe playerr
+		if(!si_opponent_assertion && !si_opponent_secret) {
+			if(!b_notif_1b_waiting) {
+				b_notif_1b_waiting = true;
+				window.clearInterval(i_timer_1a);
+
+				const xt_eta = Date.now() + (10 * XTL_MINUTES);
+				const yw_time = writable('10m 00s');
+
+				i_timer_1a = window.setInterval(() => {
+					const xtl_diff = xt_eta - Date.now();
+					const n_secs = Math.max(0, Math.floor(xtl_diff / XTL_SECONDS));
+					const n_mins = Math.floor(n_secs / 60);
+					yw_time.set(`${n_mins}m ${(''+(n_secs % 60)).padStart(2, '0')}s`)
+				}, 100);
+
+				// render clock icon
+				const dm_clock = dd('span');
+
+				Object.assign(dm_clock.style, {
+					paddingRight: '2px',
+				});
+
+				new Fa({
+					target: dm_clock,
+					props: {
+						icon: faClock,
+					},
+				});
+
+				// inform
+				await k_panel.arbiter([
+					'Your submission has been received. You opponent has {clock_icon}{timer} remaining to submit.',
+				], {
+					clock_icon: dm_clock,
+					time_remaining: yw_time,
+				});
+			}
+
+			// pause
+			await timeout(5000);
+
+			// retry
+			return round_1b(await k_game.queryGameState());
+		}
+
 
 		// emulate opponent message
 		{
@@ -1014,72 +1202,6 @@ import ActionWidget from './ActionWidget.svelte';
 				premise: dm_premise,
 			});
 		}
-	}
-
-	let si_assert_basis: CanonicalBasis = A_BASES[0];
-	let si_assert_quality: SemanticQuality | '' = '';
-
-	async function reveal_tx(): Promise<void> {
-		const s_what = si_assert_quality? use_quality_in_sentence(si_assert_quality): '';
-
-		const s_reveal = H_BASES[si_assert_basis].describe[s_lang](s_what);
-
-		await k_panel.reveal_text(s_reveal);
-	}
-
-	function select_basis(g_evt: CustomEvent<CanonicalBasis>) {
-		k_panel.submittable(null);
-
-		si_assert_basis = g_evt.detail;
-
-		si_assert_quality = '';
-
-		reveal_tx();
-	}
-
-	async function select_quality(g_evt: CustomEvent<SemanticQuality>) {
-		k_panel.submittable(null);
-
-		si_assert_quality = g_evt.detail;
-
-		const [si_attr, s_value] = si_assert_quality.split(':');
-
-		let s_tag = 'Unknowable';
-		if('nobody' === si_assert_basis) {
-			if(si_player_hint === si_assert_quality) {
-				s_tag = 'Truth';
-			}
-			else {
-				if(('color' === si_attr && s_value === si_player_color)
-					|| ('shape' === si_attr && s_value === si_player_shape)
-				) {
-					s_tag = 'Lie';
-				}
-			}
-		}
-		else {
-			if(('color' === si_attr && s_value === si_player_color)
-				|| ('shape' === si_attr && s_value === si_player_shape)
-			) {
-				s_tag = 'Truth';
-			}
-			else {
-				s_tag = 'Lie';
-			}
-		}
-
-		await reveal_tx();
-
-		k_panel.submittable(() => {
-			// hide transmission controls
-			k_tx.hide();
-
-			// remove submission button
-			k_panel.unsubmittable();
-
-			// commit text to message history
-			k_panel.commit();
-		}, s_tag);
 	}
 
 	let b_clicked = false;

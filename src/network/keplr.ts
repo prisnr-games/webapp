@@ -251,53 +251,24 @@ export class KeplrWallet implements Wallet {
 		)).signature;
 	}
 
-	execute(p_contract: string, g_msg: JsonObject, g_xfer?: readonly Coin[], g_fee?: StdFee, si_code_hash?: string): Promise<ExecuteResult> {
-		return this._k_client.execute(p_contract, g_msg, '', g_xfer, g_fee, si_code_hash || void 0);
+	execute(p_contract: string, g_msg: JsonObject, a_xfer?: readonly Coin[], g_fee?: StdFee, si_code_hash?: string): Promise<ExecuteResult> {
+		let s_opts = '';
+		if(g_fee) {
+			s_opts += ` --gas ${g_fee.gas}`;
+		}
+		if(a_xfer && a_xfer.length) {
+			const g_xfer = a_xfer[0];
+			s_opts += ` --amount ${g_xfer.amount}${g_xfer.denom}`;
+		}
+		console.log(`secretd tx compute execute ${p_contract} '${JSON.stringify(g_msg)}' --from ${this.publicAddress}${s_opts}`);
+		return this._k_client.execute(p_contract, g_msg, '', a_xfer, g_fee);
 	}
 
 	query(p_contract: string, g_msg: JsonObject, g_params?: JsonObject, si_code_hash?: string): Promise<JsonObject> {
+		console.log(`secretd q compute ${p_contract} '${JSON.stringify(g_msg)}' --from ${this.publicAddress}`);
 		return this._k_client.queryContractSmart(p_contract, g_msg, g_params || {}, si_code_hash || void 0);
 	}
 }
-// async function connectKeplr(chainId: string, secretLcd: string) {
-// 	let keplrEnabled = await checkKeplr(chainId);
-// 	let scrtAuthorized = false;
-// 	let scrtClient: SigningCosmWasmClient | null = null;
-// 	try {
-// 		// @ts-ignore
-// 		await window.keplr.enable(chainId);
-// 		// @ts-ignore
-// 		const offlineSigner = window.getOfflineSigner(chainId);
-// 		// @ts-ignore
-// 		const enigmaUtils = window.getEnigmaUtils(chainId);
-// 		const accounts = await offlineSigner.getAccounts();
-// 		const cosmJS = new SigningCosmWasmClient(
-// 			secretLcd,
-// 			accounts[0].address,
-// 			// @ts-ignore
-// 			offlineSigner,
-// 			enigmaUtils,
-// 			{
-// 				exec: {
-// 					amount: [{ amount: "62500", denom: "uscrt" }],
-// 					gas: "250000",
-// 				},
-// 			}
-// 		);
-// 		scrtAuthorized = true;
-// 		scrtClient = cosmJS;
-// 	} catch (error) {
-// 		scrtAuthorized = false;
-// 		scrtClient = null;
-// 	}
-// 	let keplr: KeplrStore = {
-// 		keplrEnabled,
-// 		scrtAuthorized,
-// 		scrtClient,
-// 	};
-// 	return keplr;
-// }
-
 // export async function getSignature(chainId: string): Promise<StdSignature> {
 // 	// @ts-ignore
 // 	const keplrOfflineSigner = window.getOfflineSigner(chainId);

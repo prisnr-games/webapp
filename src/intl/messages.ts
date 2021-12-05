@@ -4,25 +4,25 @@ import type {
 
 export const H_MESSAGES = {
 	attention: [
-		{
-			labels: {
-				en: 'hey there :)',
-			},
-		},
-		{
-			delay: 2000,
-			pause: 800,
-			labels: {
-				en: 'glad you made it!',
-			},
-		},
-		{
-			pause: 600,
-			delay: 1800,
-			labels: {
-				en: 'just remember that you should nev',
-			},
-		},
+		// {
+		// 	labels: {
+		// 		en: 'hey there :)',
+		// 	},
+		// },
+		// {
+		// 	delay: 2000,
+		// 	pause: 800,
+		// 	labels: {
+		// 		en: 'glad you made it!',
+		// 	},
+		// },
+		// {
+		// 	pause: 600,
+		// 	delay: 1800,
+		// 	labels: {
+		// 		en: 'just remember that you should nev',
+		// 	},
+		// },
 		{
 			labels: {
 				en: 'the Arbiter approaches...',

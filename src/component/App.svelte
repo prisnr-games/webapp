@@ -30,6 +30,7 @@
 		faClock,
 		faVolumeUp,
 		faVolumeMute,
+		faFire,
 	} from '@fortawesome/free-solid-svg-icons';
 
 	import fingerprintjs from '@fingerprintjs/fingerprintjs';
@@ -124,6 +125,7 @@ relative_time,
 	import {
 		EncryptedLocalStorage,
 	} from '#/util/encrypted-local-storage';
+import ActionWidget from './ActionWidget.svelte';
 
 
 	/**
@@ -573,10 +575,44 @@ relative_time,
 			});
 		}
 
+		let b_notifications_enabled = window.Notification && 'granted' === Notification.permission;
+		let b_notifications_requested = false;
+		let b_notification_notice = false;
+
+		function enable_notifications() {
+			if(b_notifications_enabled) {
+				k_panel.warn(`You will receive a notification once another player has joined.`);
+			}
+			else {
+				const dm_approve = dd('span');
+				const yc_action = new ActionWidget({
+					target: dm_approve,
+				});
+
+				yc_action.$on('change', async() => {
+					const s_status = await Notification.requestPermission();
+
+					if('denied' === s_status) {
+						k_panel.warn(`User denied request for notification permission.`);
+					}
+				});
+
+				// prompt for notifications
+				k_panel.warn(`Would you like to receive a notification once another player has joined? {approve}`, {
+					approve: dm_approve,
+				});
+			}
+		}
+
 		let xt_checked = Date.now();
 		let i_checking = setInterval(() => {
 			if(xt_checked) {
 				yw_checked.set(`Last checked ${relative_time(xt_checked)}`);
+			}
+
+			if(!b_notification_notice) {
+				b_notification_notice = true;
+				enable_notifications();
 			}
 		}, 1000);
 
@@ -616,17 +652,22 @@ relative_time,
 		// clear last checked widget text
 		yw_checked.set('');
 
+		// start alarm
+		H_AUDIO.retro_game_alarm.play();
+
 		return g_game_query;
 	}
 
 	// audio
-	const H_AUDIO = Object.fromEntries(ode({
+	const H_AUDIO_SRC = {
 		epic_transition: 'epic-transition.wav',
 		coin_win: 'coin-win.wav',
 		retro_game_alarm: 'retro-game-alarm.wav',
 		retro_game_notif: 'retro-game-notif.wav',
 		trumpet_fanfare: 'trumpet-fanfare.wav',
-	}).map(([si_key, sr_asset]) => [si_key, new Audio(`/asset/${sr_asset}`)]));
+	} as const;
+
+	const H_AUDIO = Object.fromEntries(ode(H_AUDIO_SRC).map(([si_key, sr_asset]) => [si_key, new Audio(`/asset/${sr_asset}`)])) as Record<keyof typeof H_AUDIO_SRC, HTMLAudioElement>;
 
 	// muted
 	let b_muted = false;
@@ -785,7 +826,7 @@ relative_time,
 
 				// no scrt
 				if(/Account does not exist/.test(se_join)) {
-					return fatal(`Looks like your wallet is empty. Make sure to acquire some SCRT tokens so that you pay the gas fees for transactions.`);
+					return fatal(`Looks like your wallet is empty. Make sure to acquire some SCRT tokens so that you can pay the gas fees for transactions.`);
 				}
 				// already in active game
 				else if(/must finish current game/.test(se_join)) {
@@ -845,14 +886,6 @@ relative_time,
 		si_player_color = g_game.chip_color!;
 		si_player_shape = g_game.chip_shape!;
 		si_player_hint = g_game.hint?.split('|')[1] as SemanticQuality;
-
-		// si_player_color = Object.keys(H_COLORS)[Math.floor(Math.random() * 4)] as CanonicalColor;
-		// si_player_shape = Object.keys(H_SHAPES)[Math.floor(Math.random() * 4)] as CanonicalShape;
-
-		// si_player_hint = [
-		// 	...Object.keys(H_COLORS).map(s => `color:${s}` as SemanticColorQuality),
-		// 	...Object.keys(H_SHAPES).map(s => `shape:${s}` as SemanticShapeQuality),
-		// ][Math.floor(Math.random() * 4)];
 
 		// clear
 		await k_panel.reveal_text('');
@@ -1030,6 +1063,20 @@ relative_time,
 			k_panel.commit();
 		}, s_tag);
 	}
+
+	let b_clicked = false;
+	function burn() {
+		if(!b_clicked) {
+			b_clicked = true;
+			k_panel.error(`The button you just clicked will remove all cookies and cache that the game previously created and then disable the current UI. If you agree to this, click the burn icon again.`);
+		}
+		else {
+			Object.keys(read_cookie()).forEach(si => delete_cookie(si));
+			localStorage.clear();
+			k_panel.reveal_text('');
+			return fatal(`Cache burned`);
+		}
+	}
 </script>
 
 <style lang="less">
@@ -1071,10 +1118,14 @@ relative_time,
 		margin-left: auto;
 		margin-right: auto;
 		margin-top: 4px;
+		color: fade(white, 70%);
 
-		.system-controls-audio {
+		&>* {
 			cursor: pointer;
-			color: fade(white, 70%);
+		}
+
+		&>*:nth-child(n+2) {
+			margin-left: 0.5em;
 		}
 	}
 
@@ -1121,6 +1172,9 @@ relative_time,
 <div class="system-controls">
 	<span class="system-controls-audio" alt="audio" on:click={() => b_muted = !b_muted}>
 		<Fa icon={b_muted? faVolumeMute: faVolumeUp} />
+	</span>
+	<span class="system-controls-burn" alt="destroy cookies and cache" on:click={() => burn()}>
+		<Fa icon={faFire} />
 	</span>
 </div>
 

@@ -1,6 +1,6 @@
 <script context="module" lang="ts">
 	export interface AssertionHelper {
-		show(): Promise<void>;
+		show(si_basis?: CanonicalBasis): Promise<void>;
 		hide(): void;
 	}
 </script>
@@ -58,7 +58,17 @@
 
 	let b_visible = false;
 
-	async function show(): Promise<void> {
+	let si_basis_force: CanonicalBasis | '' = '';
+
+	async function show(si_basis?: CanonicalBasis): Promise<void> {
+		si_basis_force = si_basis || '';
+
+		if(si_basis) {
+			si_basis_active = si_basis;
+
+			dispatch('basis', si_basis_active);
+		}
+
 		b_visible = true;
 	}
 
@@ -72,7 +82,14 @@
 	const data = (d_target: EventTarget, si_key: string) => (d_target as HTMLElement).closest(`[data-${si_key}]`)!.getAttribute(`data-${si_key}`)!;
 
 	function select_basis(d_event: Event): void {
-		si_basis_active = data(d_event.target!, 'basis') as CanonicalBasis;
+		const si_basis_test = data(d_event.target!, 'basis') as CanonicalBasis;
+
+		if(si_basis_force && si_basis_test !== si_basis_force) {
+			return;
+		}
+
+		si_basis_active = si_basis_test;
+
 		dispatch('basis', si_basis_active);
 	}
 

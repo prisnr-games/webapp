@@ -104,3 +104,17 @@ export const H_BASES = {
 export type CanonicalBasis = keyof typeof H_BASES;
 
 export const A_BASES = Object.keys(H_BASES) as CanonicalBasis[];
+
+
+export const H_TARGETS = {
+	bag: {
+		label: 'Arbiter',
+	},
+	opponent: {
+		label: 'Opponent',
+	},
+};
+
+export type CanonicalTarget = keyof typeof H_TARGETS;
+
+export const A_TARGETS = Object.keys(H_TARGETS) as CanonicalTarget[];

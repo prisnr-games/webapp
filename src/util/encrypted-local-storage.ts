@@ -18,6 +18,17 @@ export class EncryptedLocalStorage {
 	_si_namespace: string;
 	#_s_secret: string;
 
+	static includes(r_test: RegExp): boolean {
+		for(let i_key=localStorage.length; i_key>=0; i_key--) {
+			const si_key = localStorage.key(i_key);
+			if(si_key && r_test.test(si_key)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	constructor(si_namespace: string, s_secret: string) {
 		this._si_namespace = si_namespace;
 		this.#_s_secret = s_secret;

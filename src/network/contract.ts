@@ -212,10 +212,14 @@ export class GameContract {
 	}
 
 	submitAssertion(si_basis: CanonicalBasis, si_quality: SemanticQuality): Promise<ContractExecInfo<SubmitResponse>> {
+		const [si_attr, s_value] = si_quality.split(':');
+
+		const g_quality = 'color' === si_attr? {color:s_value}: {shape:s_value};
+
 		return this.execute<SubmitResponse>({
 			submit: {
 				target: si_basis,
-				quality: si_quality,
+				...g_quality,
 			},
 		} as SubmitMsg, {
 			amount: [

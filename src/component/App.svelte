@@ -84,11 +84,13 @@
 		oder,
 		proper,
 		timeout,
-relative_time,
+		relative_time,
+		Killables,
 	} from '#/util/belt';
 
 	import {
 		Deduction,
+		use_assertion_in_sentence,
 		use_quality_in_sentence,
 	} from '#/util/logic';
 	
@@ -103,6 +105,8 @@ relative_time,
 	import Assertion, {AssertionHelper} from './Assertion.svelte';
 	import Scene, {SceneHelper} from './Scene.svelte';
 	import PremiseWidget, {PremiseHelper} from './PremiseWidget.svelte';
+	import Decision, {DecisionHelper} from './Decision.svelte';
+	import ActionWidget from './ActionWidget.svelte';
 	
 
 	import {
@@ -120,13 +124,17 @@ relative_time,
 		P_CONTRACT_ADDR,
 		QueryGameStateResponse,
 		SI_CONTRACT_CODE_HASH,
-SubmitResponse,
+		SubmitResponse,
 	} from '#/network/contract';
 
 	import {
 		EncryptedLocalStorage,
 	} from '#/util/encrypted-local-storage';
-import ActionWidget from './ActionWidget.svelte';
+
+
+	function F_IDENTITY<T extends unknown>(w: T): T {
+		return w;
+	};
 
 
 	/**
@@ -187,11 +195,42 @@ import ActionWidget from './ActionWidget.svelte';
 	let k_prompt: PromptHelper;
 
 	/**
+	 * decision instance for communicating with Decision
+	*/
+	let k_decision: DecisionHelper;
+
+	/**
 	 * wallet instance
 	 */
 	let k_wallet: Wallet;
 
-	
+
+	/**
+	 * killables
+	 */
+	const k_killables = new Killables();
+
+
+	// Game states
+
+
+	/**
+	 * player chip and hint
+	 */
+	let si_player_color: CanonicalColor;
+	let si_player_shape: CanonicalShape;
+	let si_player_hint: SemanticQuality;
+
+	/**
+	 * deductions
+	 */
+	let k_priori = new Deduction();
+	let f_assert_1: (k: Deduction) => Deduction = F_IDENTITY;
+	let f_assert_2: (k: Deduction) => Deduction = F_IDENTITY;
+
+	$: k_deduced = f_assert_2(f_assert_1(k_priori.clone()).clone()).clone();
+
+
 	// preload images
 	// {
 		const d_img_monster = new Image();
@@ -208,10 +247,6 @@ import ActionWidget from './ActionWidget.svelte';
 			await k_panel.reveal_text(g_msg.labels[s_lang], g_msg.interval, g_msg.pause);
 		}
 	}
-
-	let si_player_color: CanonicalColor;
-	let si_player_shape: CanonicalShape;
-	let si_player_hint: SemanticQuality;
 
 	async function introduction(): Promise<void> {
 		// take a beat to apreciate the blank, dark page
@@ -253,6 +288,9 @@ import ActionWidget from './ActionWidget.svelte';
 	}
 
 	async function fatal(s_text: string): Promise<never> {
+		// kill all pending intervals and timeouts
+		k_killables.killAll();
+
 		// clear console message
 		k_panel.reveal_text('');
 
@@ -282,7 +320,7 @@ import ActionWidget from './ActionWidget.svelte';
 		}, 6e3);
 
 		// allow surprise to settle
-		await timeout(2500);
+		await timeout(2000);
 	}
 
 	async function connect_wallet(n_retries=0): Promise<void> {
@@ -291,6 +329,10 @@ import ActionWidget from './ActionWidget.svelte';
 			This game stores encrypted query permit data in local storage.
 			
 			In order to protect this data, you must provide a passphrase each time the page is loaded.
+
+			${EncryptedLocalStorage.includes(/\.permits$/)
+				? `Enter the same passphrase to restore a previous permit, or enter a different one to sign a new permit.`
+				: ''}
 		`);
 
 		async function enter_passphrase(c_retries=0): Promise<string> {
@@ -300,7 +342,7 @@ import ActionWidget from './ActionWidget.svelte';
 			// first attempt
 			if(!c_retries) {
 				// wait for button to fade in a little
-				setTimeout(() => {
+				k_killables.addTimeout(() => {
 					if(!b_clicked) {
 						// show text
 						void k_panel.reveal_text('↓↓ click below to enter passphrase ↓↓');  // ▼
@@ -436,6 +478,9 @@ import ActionWidget from './ActionWidget.svelte';
 		// if the chain was added in response to the suggestion
 		let b_added = false;
 
+		// keep track of how long it takes to enable
+		const xt_suggest = Date.now();
+
 		// enable chain
 		try {
 			b_added = await k_wallet.enable({
@@ -443,6 +488,8 @@ import ActionWidget from './ActionWidget.svelte';
 				chainName: S_CHAIN_NAME,
 				rest: P_LCD_REST,
 				rpc: P_LCD_RPC,
+			}, () => {
+				return fatal(`Account was changed in wallet. Session terminated.`);
 			});
 		}
 		// something went wrong
@@ -477,6 +524,12 @@ import ActionWidget from './ActionWidget.svelte';
 		// user rejected chain
 		if(!b_added) {
 			return fatal(`Chain suggestion was denied. Unable to proceed.`);
+		}
+
+		// first time adding
+		if(Date.now() - xt_suggest > XTL_SECONDS) {
+			k_panel.warn(`Now that you've added this chain, please make sure to switch to "${S_CHAIN_NAME}" in Keplr!`);
+			await timeout(2100);
 		}
 
 		// get key store
@@ -594,10 +647,24 @@ import ActionWidget from './ActionWidget.svelte';
 				});
 
 				yc_action.$on('change', async() => {
+					const xt_prompted = Date.now();
+
 					const s_status = await Notification.requestPermission();
 
 					if('denied' === s_status) {
-						k_panel.warn(`User denied request for notification permission.`);
+						yc_action.$set({
+							si_selected: 'none',
+						});
+
+						if(Date.now() - xt_prompted < 0.5*XTL_SECONDS) {
+							k_panel.warn(`User previously denied request for notifications. Need to reset in browser settings.`);
+						}
+						else {
+							k_panel.warn(`User denied request for notification permission.`);
+						}
+					}
+					else {
+						k_panel.warn(`Confirmed. Notification will be sent when another player joins.`);
 					}
 				});
 
@@ -609,7 +676,7 @@ import ActionWidget from './ActionWidget.svelte';
 		}
 
 		let xt_checked = Date.now();
-		let i_checking = setInterval(() => {
+		let i_checking = k_killables.addInterval(() => {
 			if(xt_checked) {
 				yw_checked.set(`Last checked ${relative_time(xt_checked)}`);
 			}
@@ -651,7 +718,7 @@ import ActionWidget from './ActionWidget.svelte';
 		}
 
 		// stop checking
-		clearInterval(i_checking);
+		k_killables.delInterval(i_checking);
 
 		// clear last checked widget text
 		yw_checked.set('');
@@ -667,7 +734,7 @@ import ActionWidget from './ActionWidget.svelte';
 		await k_panel.reveal_text(s_loading+' ');
 
 		let i_spin = 0;
-		return window.setInterval(() => {
+		return k_killables.addInterval(() => {
 			k_panel.reveal_text(s_loading+' '+A_SPIN[i_spin++]+' ', 5);
 			i_spin %= A_SPIN.length;
 		}, 200);
@@ -705,6 +772,82 @@ import ActionWidget from './ActionWidget.svelte';
 			}, 30*XTL_DAYS);
 		}
 	}
+
+
+	interface CountdownConfig {
+		eta: () => number;
+		kill_text?: string;
+	}
+
+	interface CountdownInfo {
+		interval: number;
+		clock: HTMLElement,
+		store: Writable<string>,
+	}
+
+	class Countdown implements CountdownInfo {
+		protected _yw_time: Writable<string>;
+		protected _dm_clock: HTMLElement;
+		protected _i_interval: number;
+		protected _s_kill: string;
+
+		constructor(gc_countdown: CountdownConfig) {
+			this._s_kill = gc_countdown.kill_text || '';
+
+			this._yw_time = writable('10m 00s remaining');
+
+			this._i_interval = k_killables.addInterval(() => {
+				const xtl_diff = gc_countdown.eta() - Date.now();
+				const n_secs = Math.max(0, Math.floor(xtl_diff / XTL_SECONDS));
+				const n_mins = Math.floor(n_secs / 60);
+				this._yw_time.set(`${n_mins}m ${(''+(n_secs % 60)).padStart(2, '0')}s remaining`)
+			}, 100);
+
+			// render clock icon
+			const dm_clock = this._dm_clock = dd('span');
+			Object.assign(dm_clock.style, {
+				paddingRight: '2px',
+			});
+
+			// create icon
+			new Fa({
+				target: dm_clock,
+				props: {
+					icon: faClock,
+				},
+			});
+		}
+
+		get interval() {
+			return this._i_interval;
+		}
+
+		get clock() {
+			return this._dm_clock;
+		}
+
+		get store() {
+			return this._yw_time;
+		}
+
+		kill(s_text=''): void {
+			// not yet killed
+			if(this._i_interval) {
+				// del interval
+				k_killables.delInterval(this._i_interval);
+
+				// now it is killed
+				this._i_interval = 0;
+
+				// remove clock icon
+				this._dm_clock.remove();
+
+				// update store
+				this._yw_time.set(s_text || this._s_kill);
+			}
+		}
+	}
+
 
 	let b_surprise = false;
 	let dm_surprise: HTMLElement;
@@ -749,7 +892,8 @@ import ActionWidget from './ActionWidget.svelte';
 
 		// a game was started
 		if(h_cookie.game) {
-			const i_spinning = await spinner('checking for active game...');
+			let i_spinning = 0;
+			spinner('checking for active game...').then(i => i_spinning = i);
 
 			// check for active game
 			let g_game_contd!: GameStateResponse | undefined;
@@ -760,7 +904,17 @@ import ActionWidget from './ActionWidget.svelte';
 				debugger;
 			}
 			finally {
-				clearInterval(i_spinning);
+				if(i_spinning) {
+					k_killables.delInterval(i_spinning);
+				}
+				else {
+					const i_kill = window.setInterval(() => {
+						if(i_spinning) {
+							clearInterval(i_kill);
+							k_killables.delInterval(i_spinning);
+						}
+					}, 100);
+				}
 
 				// clear
 				k_panel.reveal_text('');
@@ -768,6 +922,7 @@ import ActionWidget from './ActionWidget.svelte';
 
 			// continue game
 			if(g_game_contd) {
+				console.log('Resuming:', g_game_contd);
 				k_panel.warn(`Successfully resumed active game.`);
 
 				let g_game: GameStateResponse = g_game_contd;
@@ -777,6 +932,7 @@ import ActionWidget from './ActionWidget.svelte';
 				}
 
 				if(1 === g_game.round) {
+					// start at round 1a, it will skip to appropriate sub-round
 					return round_1a(g_game, true);
 				}
 			}
@@ -828,7 +984,9 @@ import ActionWidget from './ActionWidget.svelte';
 		}
 		// failed
 		catch(e_join: unknown) {
-			clearInterval(i_spinning);
+			console.error(e_join);
+
+			k_killables.delInterval(i_spinning);
 
 			// error
 			if(e_join instanceof Error) {
@@ -844,7 +1002,7 @@ import ActionWidget from './ActionWidget.svelte';
 						game: 'started',
 					}, 12*XTL_HOURS);
 
-					return fatal(`Looks like you changed browsers since you last joined a game with this account. Please reload and the game will attempt to resume.`);
+					return fatal(`Looks like you changed browsers or cleared cache since you last joined a game with this account. Please reload and the game will attempt to resume.`);
 				}
 				// contract not found
 				else if(/contract not found/i.test(se_join)) {
@@ -862,7 +1020,9 @@ import ActionWidget from './ActionWidget.svelte';
 			}
 		}
 
-		clearInterval(i_spinning);
+		console.log(g_join);
+
+		k_killables.delInterval(i_spinning);
 
 		// clear prompt
 		k_panel.reveal_text('');
@@ -880,11 +1040,11 @@ import ActionWidget from './ActionWidget.svelte';
 		}
 
 		// 
-		const g_game_join = g_res_join?.game_state;
+		const g_game_join = g_res_join?.game_state!;
 		let g_game = g_game_join!;
 
 		// must wait for another player
-		if(g_game_join?.round) {
+		if(0 === g_game_join.round) {
 			// record that a game was started
 			write_cookie({
 				game: 'started',
@@ -898,76 +1058,26 @@ import ActionWidget from './ActionWidget.svelte';
 		if(1 === g_game.round) {
 			return round_1a(g_game);
 		}
+		// resume round 3
+		else if(3 === g_game.round) {
+			return fatal('round_3()');
+		}
+		else {
+			console.error(g_game);
+			return fatal('game completed?');
+		}
 	});
 
-
-	let i_timer_1a = 0;
-
-	async function round_1a(g_game: GameStateResponse, b_resumed=false): Promise<void> {
+	function update_player_state(g_game: GameStateResponse) {
 		si_player_color = g_game.chip_color!.split(':')[1] as CanonicalColor;
 		si_player_shape = g_game.chip_shape!.split(':')[1] as CanonicalShape;
 		si_player_hint = g_game.hint?.split('|')[1] as SemanticQuality;
 
-		// clear
-		await k_panel.reveal_text('');
-
-		// give chip
-		await k_panel.arbiter(`Here is your chip, player...`);
-
-		// animate chip
-		await k_scene.animate_chip_entry(si_player_color, si_player_shape);
-
-		if(!b_resumed) await timeout(5e3);
-
-		let b_hint_color = si_player_hint.startsWith('color:');
-
-		await k_panel.arbiter(`
-			Round 1: I've given you the ${si_player_color} ${si_player_shape} this round, and a hint that nobody has ${b_hint_color? '': 'a '}${si_player_hint.replace(/^[^:]+:/, '')}.
-
-			I've also given your opponent a hint. Theirs is that nobody has a certain ${b_hint_color? 'shape': 'color'}.
-		`);
-
-		if(!b_resumed) await timeout(4.1e3);
-
-		const xt_eta = Date.now() + (10 * XTL_MINUTES);
-		const yw_time = writable('10m 00s');
-
-		i_timer_1a = window.setInterval(() => {
-			const xtl_diff = xt_eta - Date.now();
-			const n_secs = Math.max(0, Math.floor(xtl_diff / XTL_SECONDS));
-			const n_mins = Math.floor(n_secs / 60);
-			yw_time.set(`${n_mins}m ${(''+(n_secs % 60)).padStart(2, '0')}s`)
-		}, 100);
-
-		// render clock icon
-		const dm_clock = dd('span');
-
-		Object.assign(dm_clock.style, {
-			paddingRight: '2px',
-		});
-
-		new Fa({
-			target: dm_clock,
-			props: {
-				icon: faClock,
-			},
-		});
-
-		// final instructions
-		await k_panel.arbiter([
-			'Now you must choose what to tell the other player. I will reveal both of your messages simultaneously once they both have been submitted. You have {clock_icon}{time_remaining} remaining.',
-		], {
-			clock_icon: dm_clock,
-			time_remaining: yw_time,
-		});
-
-		// show transmission controls
-		await k_tx.show();
-
-		if(!b_resumed) await timeout(4e3);
-
-		// reveal transmission buttons
-		reveal_tx();
+		// create a priori deduction
+		k_priori = new Deduction();
+		k_priori.nobody(`color:${si_player_color}`);
+		k_priori.nobody(`shape:${si_player_shape}`);
+		k_priori.nobody(si_player_hint);
 	}
 
 	let si_assert_basis: CanonicalBasis = A_BASES[0];
@@ -1089,6 +1199,10 @@ import ActionWidget from './ActionWidget.svelte';
 				return reset_tx();
 			}
 
+			// success
+			if(k_countdown_1a) k_countdown_1a.kill();
+			if(k_countdown_1b) k_countdown_1b.kill();
+
 			// remove submission button
 			k_panel.unsubmittable();
 
@@ -1100,52 +1214,109 @@ import ActionWidget from './ActionWidget.svelte';
 		}, s_tag);
 	}
 
-	let b_notif_1b_waiting = false;
-	let i_timer_1b = 0;
 
-	async function round_1b(g_game: GameStateResponse): Promise<void> {
+
+	let k_countdown_1a: Countdown;
+
+	async function round_1a(g_game: GameStateResponse, b_resumed=false): Promise<void> {
+		update_player_state(g_game);
+
+		// clear
+		await k_panel.reveal_text('');
+
+		// give chip
+		await k_panel.arbiter(`Here is your chip, player...`);
+
+		// animate chip
+		await k_scene.animate_chip_entry(si_player_color, si_player_shape);
+
+		if(!b_resumed) await timeout(5e3);
+
+		let b_hint_color = si_player_hint.startsWith('color:');
+
+		await k_panel.arbiter(`
+			Round 1: I've given you the ${si_player_color} ${si_player_shape} this round, and a hint that nobody has ${b_hint_color? '': 'a '}${si_player_hint.replace(/^[^:]+:/, '')}.
+
+			I've also given your opponent a hint. Theirs is that nobody has a certain ${b_hint_color? 'shape': 'color'}.
+		`);
+
+		// resuming
+		if(b_resumed) {
+			// player already submitted 1st assertion
+			if(g_game.first_submit) {
+				await k_panel.user(use_assertion_in_sentence(g_game.first_submit));
+
+				// already beyond round 1a; skip ahead
+				return round_1b(g_game, b_resumed);
+			}
+		}
+		// not resumed
+		else {
+			await timeout(4.1e3);
+		}
+
+		// countdown timer
+		{
+			const xt_eta = Date.now() + (10 * XTL_MINUTES);
+			k_countdown_1a = new Countdown({
+				eta: () => xt_eta,
+				kill_text: 'successfully submitted',
+			});
+
+			// final instructions
+			await k_panel.arbiter([
+				'Now you must choose what to tell the other player. I will reveal both of your messages simultaneously once they both have been submitted. You have {clock_icon}{time_remaining}.',
+			], {
+				clock_icon: k_countdown_1a.clock,
+				time_remaining: k_countdown_1a.store,
+			});
+		}
+
+		// show transmission controls
+		await k_tx.show();
+
+		if(!b_resumed) await timeout(4e3);
+
+		// reveal transmission buttons
+		reveal_tx();
+	}
+
+
+	let b_notif_1b_waiting = false;
+	let k_countdown_1a2: Countdown;
+	let k_countdown_1b: Countdown;
+
+	async function round_1b(g_game: GameStateResponse, b_resumed=false): Promise<void> {
+		// update player's local state
+		update_player_state(g_game);
+
 		// 
 		const {
 			opponent_first_submit: si_opponent_assertion,
 			first_extra_secret: si_opponent_secret,
 		} = g_game;
 
-		// still waiting on othe playerr
+		// still waiting on the player
 		if(!si_opponent_assertion && !si_opponent_secret) {
 			if(!b_notif_1b_waiting) {
 				b_notif_1b_waiting = true;
-				window.clearInterval(i_timer_1a);
 
+				// clear 1a
+				if(k_countdown_1a) k_countdown_1a.kill('already submittted');
+
+				// opponent's time remaining
 				const xt_eta = Date.now() + (10 * XTL_MINUTES);
-				const yw_time = writable('10m 00s');
-
-				i_timer_1a = window.setInterval(() => {
-					const xtl_diff = xt_eta - Date.now();
-					const n_secs = Math.max(0, Math.floor(xtl_diff / XTL_SECONDS));
-					const n_mins = Math.floor(n_secs / 60);
-					yw_time.set(`${n_mins}m ${(''+(n_secs % 60)).padStart(2, '0')}s`)
-				}, 100);
-
-				// render clock icon
-				const dm_clock = dd('span');
-
-				Object.assign(dm_clock.style, {
-					paddingRight: '2px',
-				});
-
-				new Fa({
-					target: dm_clock,
-					props: {
-						icon: faClock,
-					},
+				k_countdown_1a2 = new Countdown({
+					eta: () => xt_eta,
+					kill_text: 'also submitted theirs',
 				});
 
 				// inform
 				await k_panel.arbiter([
-					'Your submission has been received. You opponent has {clock_icon}{timer} remaining to submit.',
+					'Your submission has been received. Your opponent has {clock_icon}{time_remaining}.',
 				], {
-					clock_icon: dm_clock,
-					time_remaining: yw_time,
+					clock_icon: k_countdown_1a2.clock,
+					time_remaining: k_countdown_1a2.store,
 				});
 			}
 
@@ -1156,29 +1327,75 @@ import ActionWidget from './ActionWidget.svelte';
 			return round_1b(await k_game.queryGameState());
 		}
 
+		// clear 1b
+		if(k_countdown_1a2) k_countdown_1a2.kill();
+		
 
-		// emulate opponent message
-		{
-			await timeout(3e3);
+		// premise dom
+		const dm_premise = dd('span');
 
-			// create a priori deduction
-			const k_priori = new Deduction();
-			k_priori.nobody(`color:${si_player_color}`);
-			k_priori.nobody(`shape:${si_player_shape}`);
-			k_priori.nobody(si_player_hint);
+		// opponent submitted provably false assertion (lie)
+		if(si_opponent_secret) {
+			const [si_basis, si_quality] = si_opponent_secret.split('|') as [CanonicalBasis, SemanticQuality];
+
+			const yw_secret = writable('');
+
+			// opponent's hint
+			if('nobody_has' === si_basis) {
+				// enhance deduction
+				k_priori.nobody(si_quality);
+
+				// set widget value
+				yw_secret.set(`Your opponent has the hint that "nobody has ${use_quality_in_sentence(si_quality)}".`);
+			}
+			// opponent's chip
+			else {
+				// enhance deduction
+				k_priori.opponent(si_quality, true);
+
+				// set widget value
+				yw_secret.set(`Your opponent has ${use_quality_in_sentence(si_quality)}.`);
+			}
+
+			// render premise widget
+			new PremiseWidget({
+				target: dm_premise,
+				props: {
+					b_mode_nobody: false,  // phony
+					si_assertion: si_quality,  // phony
+					si_known: 'true',  // all that matters is that this statement is true
+				},
+			});
+		
+			// inform user
+			k_panel.arbiter(`
+				The other player tried to deceive you by submitting a false assertion. You would have known it's false given what you know about your chip and your hint.
+				
+				Instead, I will now reveal to you one of their secrets. They will not know that I have done any of this.
+
+				{secret} {premise}
+			`, {
+				secret: yw_secret,
+				premise: dm_premise,
+			});
+		}
+		// opponent submitted reasonable assertion
+		else if(si_opponent_assertion) {
+			const [si_basis, si_quality] = si_opponent_assertion.split('|') as [CanonicalBasis, SemanticQuality];
 
 			// prepare opp1 deduction
 			let k_opp1 = k_priori.clone();
 
-			// premise dom
-			const dm_premise = dd('span');
+			// already known?
+			const b_known = 'nobody_has' === si_basis && si_quality === si_player_hint;
 
 			// render premise widget
 			const yc_premise = new PremiseWidget({
 				target: dm_premise,
 				props: {
-					b_mode_nobody: false,
-					si_assertion: 'shape:star',
+					b_mode_nobody: 'nobody_has' === si_basis,
+					si_assertion: si_quality,
+					si_known: b_known? 'undeniable': '',
 				},
 			});
 
@@ -1187,27 +1404,206 @@ import ActionWidget from './ActionWidget.svelte';
 
 			// listen for change to premise
 			yc_premise.$on('change', () => {
-				k_opp1 = k_premise.apply(k_priori.clone());
+				f_assert_1 = k_premise.apply;
+
+				// k_opp1 = k_premise.apply(k_priori.clone());
 
 				console.log(`Priori: ${k_priori.explain()}`);
 				console.log(`Opp1: ${k_opp1.explain()}`);
 				// debugger;
-				// console.log([k_priori, k_opp1]);
+				console.log([k_priori, k_opp1]);
 			});
 
-
+			// make statement
 			k_panel.opponent([
-				'Nobody has a star {premise}'
+				`${proper(use_assertion_in_sentence(si_opponent_assertion))} {premise}`,
 			], {
 				premise: dm_premise,
 			});
 		}
+		// assert bad
+		else {
+			return fatal(`Fatal system error: unable to parse game state`);
+		}
+
+		// resuming
+		if(b_resumed) {
+			// user has already submitted 2nd assertioon
+			if(g_game.second_submit) {
+				await k_panel.user(use_assertion_in_sentence(g_game.second_submit));
+
+				return round_1c(g_game, b_resumed);
+			}
+		}
+		// not resumed
+		else {
+			await timeout(4.1e3);
+		}
+
+		const xt_eta = Date.now() + 10*XTL_MINUTES;
+		k_countdown_1b = new Countdown({
+			eta: () => xt_eta,
+			kill_text: 'already submitted',
+		});
+
+		// final instructions
+		const si_basis_force = 'nobody_has' === g_game.first_submit?.split('|')[0]? 'i_have': 'nobody_has';
+		await k_panel.arbiter([
+			`Both of you must now exchange one more message with each other. This time, I'm requiring you to submit a message about ${'nobody_has' === si_basis_force? 'what "nobody has"': 'your chip'}. You have {clock_icon}{time_remaining}.`,
+		], {
+			clock_icon: k_countdown_1b.clock,
+			time_remaining: k_countdown_1b.store,
+		});
+
+		// show transmission controls
+		await k_tx.show(si_basis_force);
+
+		// reveal transmission buttons
+		reveal_tx();
 	}
 
-	let b_clicked = false;
+	
+	let b_notif_1c_waiting = false;
+	let k_countdown_1b2: Countdown;
+	let k_countdown_1c: Countdown;
+
+	async function round_1c(g_game: GameStateResponse, b_resumed=false): Promise<void> {
+		// 
+		const {
+			opponent_second_submit: si_opponent_assertion,
+			second_extra_secret: si_opponent_secret,
+		} = g_game;
+
+		// still waiting on the player
+		if(!si_opponent_assertion && !si_opponent_secret) {
+			if(!b_notif_1c_waiting) {
+				b_notif_1c_waiting = true;
+
+				// clear 1b2
+				if(k_countdown_1b2) k_countdown_1b2.kill();
+				
+				// opponent's time remaining
+				const xt_eta = Date.now() + (10 * XTL_MINUTES);
+				k_countdown_1c = new Countdown({
+					eta: () => xt_eta,
+					kill_text: 'also submitted theirs',
+				});
+
+				// inform
+				await k_panel.arbiter([
+					'Your 2nd submission has been received. Your opponent has {clock_icon}{time_remaining}.',
+				], {
+					clock_icon: k_countdown_1c.clock,
+					time_remaining: k_countdown_1c.store,
+				});
+			}
+
+			// pause
+			await timeout(5000);
+
+			// retry
+			return round_1c(await k_game.queryGameState());
+		}
+
+		// premise dom
+		const dm_premise = dd('span');
+
+		// opponent submitted provably false assertion (lie)
+		if(si_opponent_secret) {
+			const [si_basis, si_quality] = si_opponent_secret.split('|') as [CanonicalBasis, SemanticQuality];
+
+			const yw_secret = writable('');
+
+			// opponent's hint
+			if('nobody_has' === si_basis) {
+				// enhance deduction
+				f_assert_2 = k => k.nobody(si_quality);
+
+				// set widget value
+				yw_secret.set(`Your opponent has the hint that "nobody has ${use_quality_in_sentence(si_quality)}".`);
+			}
+			// opponent's chip
+			else {
+				// enhance deduction
+				f_assert_2 = k => k.opponent(si_quality, true);
+
+				// set widget value
+				yw_secret.set(`Your opponent has ${use_quality_in_sentence(si_quality)}.`);
+			}
+
+			// render premise widget
+			new PremiseWidget({
+				target: dm_premise,
+				props: {
+					b_mode_nobody: false,  // phony
+					si_assertion: si_quality,  // phony
+					si_known: 'true',  // all that matters is that this statement is true
+				},
+			});
+		
+			// inform user
+			k_panel.arbiter(`
+				The other player tried to deceive you by submitting a false assertion. You would have known it's false given what you know about your chip and your hint.
+				
+				Instead, I will now reveal to you one of their secrets. They will not know that I have done any of this.
+
+				{secret} {premise}
+			`, {
+				secret: yw_secret,
+				premise: dm_premise,
+			});
+		}
+		// opponent submitted reasonable assertion
+		else if(si_opponent_assertion) {
+			// clear 1c
+			if(k_countdown_1c) k_countdown_1c.kill();
+
+			const [si_basis, si_quality] = si_opponent_assertion.split('|') as [CanonicalBasis, SemanticQuality];
+
+			// already known?
+			const b_known = 'nobody_has' === si_basis && si_quality === si_player_hint;
+
+			// render premise widget
+			const yc_premise = new PremiseWidget({
+				target: dm_premise,
+				props: {
+					b_mode_nobody: 'nobody_has' === si_basis,
+					si_assertion: si_quality,
+					si_known: b_known? 'undeniable': '',
+				},
+			});
+
+			// premise helper
+			const k_premise = yc_premise.k_premise;
+
+			// listen for change to premise
+			yc_premise.$on('change', () => {
+				f_assert_2 = k_premise.apply;
+			});
+
+			// make statement
+			k_panel.opponent([
+				`${proper(use_assertion_in_sentence(si_opponent_assertion))} {premise}`,
+			], {
+				premise: dm_premise,
+			});
+		}
+		// assert bad
+		else {
+			return fatal(`Fatal system error: unable to parse game state`);
+		}
+
+		// accept guess
+		await k_decision.show();
+
+		console.log(g_game);
+	}
+
+
+	let b_burn_clicked = false;
 	function burn() {
-		if(!b_clicked) {
-			b_clicked = true;
+		if(!b_burn_clicked) {
+			b_burn_clicked = true;
 			k_panel.error(`The button you just clicked will remove all cookies and cache that the game previously created and then disable the current UI. If you agree to this, click the burn icon again.`);
 		}
 		else {
@@ -1313,14 +1709,14 @@ import ActionWidget from './ActionWidget.svelte';
 	<span class="system-controls-audio" alt="audio" on:click={() => b_muted = !b_muted}>
 		<Fa icon={b_muted? faVolumeMute: faVolumeUp} />
 	</span>
-	<span class="system-controls-burn" alt="destroy cookies and cache" on:click={() => burn()}>
-		<Fa icon={faFire} />
-	</span>
+	{#if (h_cookie && Object.keys(h_cookie).length) || localStorage.length}
+		<span class="system-controls-burn" alt="destroy cookies and cache" on:click={() => burn()} transition:fade={{duration:1e3}}>
+			<Fa icon={faFire} />
+		</span>
+	{/if}
 </div>
 
-<MessagePanel bind:k_panel>
-	
-</MessagePanel>
+<MessagePanel bind:k_panel />
 
 
 <div class="surprise" bind:this={dm_surprise}>
@@ -1328,13 +1724,11 @@ import ActionWidget from './ActionWidget.svelte';
 </div>
 
 <div class="container">
-	<Prompt bind:k_prompt>
+	<Prompt bind:k_prompt />
 
-	</Prompt>
+	<Assertion bind:k_tx on:basis={select_basis} on:quality={select_quality} />
 
-	<Assertion bind:k_tx on:basis={select_basis} on:quality={select_quality}>
-
-	</Assertion>
+	<Decision bind:k_decision {k_deduced} />
 
 	{#if si_player_hint}
 		<div class="mine" transition:blur={{duration:2.4e3, easing:quadInOut, delay: 4.5e3}}>
@@ -1344,14 +1738,12 @@ import ActionWidget from './ActionWidget.svelte';
 			<div class="hint">
 				<span class="hint-prefix">Hint:</span>
 				<span class="hint-sentence">
-					Nobody has {use_quality_in_sentence(si_player_hint)}
+					{proper(use_assertion_in_sentence(`nobody_has|${si_player_hint}`))}
 				</span>
 			</div>
 		</div>
 	{/if}
 
-	<Scene bind:k_scene>
-
-	</Scene>
+	<Scene bind:k_scene />
 
 </div>

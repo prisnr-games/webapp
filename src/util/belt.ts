@@ -89,3 +89,58 @@ export function relative_time(z_when: number | Date, z_relative: number | Date=D
 		}
 	}
 }
+
+export class Killables {
+	protected _as_intervals = new Set<number>();
+	protected _as_timeouts = new Set<number>();
+
+	constructor() {
+
+	}
+
+	addInterval(fk_action: VoidFunction, xtl_interval: number): number {
+		const i_handle = window.setInterval(fk_action, xtl_interval);
+
+		this._as_intervals.add(i_handle);
+
+		return i_handle;
+	}
+
+	addTimeout(fk_action: VoidFunction, xtl_timeout: number): number {
+		const i_handle = window.setTimeout(() => {
+			// auto-delete
+			this.delTimeout(i_handle);
+
+			// call action
+			fk_action();
+		}, xtl_timeout);
+
+		this._as_timeouts.add(i_handle);
+
+		return i_handle;
+	}
+
+	delInterval(i_handle: number): void {
+		window.clearInterval(i_handle);
+
+		this._as_intervals.delete(i_handle);
+	}
+
+	delTimeout(i_handle: number): void {
+		window.clearTimeout(i_handle);
+
+		this._as_timeouts.delete(i_handle);
+	}
+
+	killAll(): void {
+		for(const i_handle of this._as_intervals) {
+			this.delInterval(i_handle);
+		}
+
+		for(const i_handle of this._as_timeouts) {
+			this.delTimeout(i_handle);
+		}
+	}
+}
+
+

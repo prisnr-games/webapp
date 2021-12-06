@@ -23,10 +23,12 @@
 		faQuestionCircle,
 		faDotCircle,
 		faMinusCircle,
+		faTooth,
+faCheck,
 	} from '@fortawesome/free-solid-svg-icons';
 
 	import {
-		ode,
+		ode, proper,
 	} from '#/util/belt';
 
 	import type {
@@ -40,6 +42,10 @@
 	}
 
 	const H_OPTS: Record<Belief, Opt> = {
+		ignore: {
+			label: 'Ignore',
+			icon: faDotCircle,
+		},
 		trust: {
 			label: 'Trust',
 			icon: faCheckCircle,
@@ -48,16 +54,30 @@
 			label: 'Distrust',
 			icon: faTimesCircle,
 		},
-		ignore: {
-			label: 'Ignore',
-			icon: faDotCircle,
-		},
 	};
 
-	const NL_OPTS = ode(H_OPTS).length;
+	let a_opts = ode(H_OPTS);
+
+	$: nl_opts = a_opts.length;
 
 	export let b_mode_nobody: boolean;
 	export let si_assertion: SemanticQuality;
+	export let si_known: 'undeniable' | 'true' | 'verified' | '';
+
+	$: {
+		if(si_known) {
+			a_opts = ode({
+				ignore: {
+					label: proper(si_known),
+					icon: ({
+						undeniable: faTooth,
+						true: faCheck,
+						verified: faCheck,
+					})[si_known],
+				},
+			});
+		}
+	}
 
 	export const k_premise: PremiseHelper = {
 		apply(k_deduction: Deduction): Deduction {
@@ -114,7 +134,23 @@
 		margin-left: 1.5em;
 		width: 350px;
 		position: absolute;
-		top: -5px;
+		margin-top: -5px;
+
+		&.known {
+			width: 130px;
+
+			.truth-opt.selected {
+				:global(&.undeniable[data-opt="ignore"] svg) {
+					color: gold;
+				}
+				:global(&.true[data-opt="ignore"] svg) {
+					color: limegreen;
+				}
+				:global(&.verified[data-opt="ignore"] svg) {
+					color: skyblue;
+				}
+			}
+		}
 
 		.truth-opt {
 			flex: 1;
@@ -124,6 +160,7 @@
 			border-style: solid;
 			border-width: 1px 0;
 			border-color: fade(white, 20%);
+			border-radius: 0;
 
 			cursor: pointer;
 
@@ -164,19 +201,29 @@
 
 		.opt-lft {
 			border-left-width: 1px;
-			border-radius: 5px 0 0 5px;
+			border-top-left-radius: 5px;
+			border-bottom-left-radius: 5px;
 		}
 
 		.opt-rgt {
 			border-right-width: 1px;
-			border-radius: 0 5px 5px 0;
+			border-top-right-radius: 5px;
+			border-bottom-right-radius: 5px;
 		}
 	}
 </style>
 
-<span class="truth" bind:this={dm_truth}>
-	{#each ode(H_OPTS) as [si_opt, g_opt], i_opt}
-		<span class="truth-opt {0 === i_opt? 'opt-lft': NL_OPTS-1 === i_opt? 'opt-rgt': 'opt-mid'}" data-opt="{si_opt}" on:click={() => select_opt(si_opt)} class:selected={si_opt === si_belief}>
+<span class="truth" bind:this={dm_truth} class:known={!!si_known}>
+	{#each a_opts as [si_opt, g_opt], i_opt}
+		<span
+			class="truth-opt {0 === i_opt? 'opt-lft': ''} {nl_opts-1 === i_opt? 'opt-rgt': ''}"
+			data-opt="{si_opt}"
+			on:click={() => select_opt(si_opt)}
+			class:selected={si_opt === si_belief}
+			class:undeniable={'undeniable' === si_known}
+			class:true={'true' === si_known}
+			class:verified={'verified' === si_known}
+		>
 			<span class="truth-opt-icon">
 				<Fa icon={g_opt.icon}/>
 			</span>

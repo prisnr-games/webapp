@@ -18,6 +18,7 @@
 		receive(g_msg: ReceivedMessage): Promise<void>;
 		arbiter(z_text: TextInput, h_widgets?: Widgets): Promise<void>;
 		opponent(a_text: string[], h_widgets?: Widgets): Promise<void>;
+		user(z_text: string | string[], h_widgets?: Widgets): Promise<void>;
 		error(z_text: TextInput, b_fatal?: boolean): Promise<void>;
 		warn(z_text: TextInput, h_widgets?: Widgets): Promise<void>;
 		wallet(g_addr: AddrInfo): void;
@@ -97,6 +98,7 @@
 		receive,
 		arbiter,
 		opponent,
+		user,
 		error,
 		warn,
 		wallet,
@@ -130,6 +132,8 @@
 	let b_nav_display = false;
 	let s_nav_name = '';
 	let s_nav_addr = '';
+
+	let s_account_alias = '';
 
 	/**
 	 * submit button
@@ -338,12 +342,23 @@
 		});
 	}
 
+	async function user(z_text: string | string[], h_widgets?: Widgets): Promise<void> {
+		return await receive({
+			from: `You${s_account_alias}`,
+			classes: ['from-user'],
+			text: rerformat_lines(z_text),
+			widgets: h_widgets || {},
+		});
+	}
+
 	async function commit(): Promise<void> {
-		dm_history.append(dd('div', {
-			class: 'line-commit',
-		}, [
-			`> Player: ${s_text}`,
-		]));
+		// dm_history.append(dd('div', {
+		// 	class: 'line-commit',
+		// }, [
+		// 	`> You${s_account_alias}: ${s_text}`,
+		// ]));
+
+		user(s_text);
 
 		s_text = '';
 	}
@@ -374,6 +389,8 @@
 			b_nav_display = true;
 			s_nav_name = g_addr.name;
 			s_nav_addr = g_addr.addr;
+
+			s_account_alias = s_nav_name? ` (${s_nav_name})`: '';
 		}
 		else {
 			b_nav_display = false;

@@ -41,6 +41,7 @@ import {
 
 import type {
 	Wallet,
+	AccountChangeCallback,
 	SecretChainInfo,
 } from './wallet';
 
@@ -84,13 +85,16 @@ export class KeplrWallet implements Wallet {
 	protected _k_client!: SigningCosmWasmClient;
 	protected _g_key!: Key;
 	protected _a_accounts!: readonly AccountData[];
+	protected _fk_change!: AccountChangeCallback;
 
 	protected constructor(k_keplr: Keplr) {
 		this._k_keplr = k_keplr;
 	}
 
-	async enable(g_chain: SecretChainInfo): Promise<boolean> {
+	async enable(g_chain: SecretChainInfo, fk_change: AccountChangeCallback): Promise<boolean> {
 		const si_chain = this._si_chain = g_chain.chainId;
+
+		this._fk_change = fk_change;
 
 		// suggest chain
 		try {
@@ -190,6 +194,14 @@ export class KeplrWallet implements Wallet {
 				},
 			}
 		);
+
+		// listen for change event
+		window.addEventListener('keplr_keystorechange', async() => {
+			const g_key = await this._k_keplr.getKey(si_chain);
+			if(g_key.bech32Address !== this.publicAddress) {
+				this._fk_change();
+			}
+		});
 
 		// worked
 		return true;

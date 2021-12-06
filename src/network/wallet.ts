@@ -60,7 +60,7 @@ export class NotEnabledError extends WalletError {
  * wallet interface
  */
 export interface Wallet {
-	enable(g_chain: SecretChainInfo): Promise<boolean>;
+	enable(g_chain: SecretChainInfo, fk_change: AccountChangeCallback): Promise<boolean>;
 	get chain(): string;
 	get key(): Key;
 	get accounts(): readonly AccountData[];
@@ -77,3 +77,5 @@ export interface SecretChainInfo {
 	rpc: string;
 	rest: string;
 }
+
+export type AccountChangeCallback = VoidFunction;

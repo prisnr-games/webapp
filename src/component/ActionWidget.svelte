@@ -46,12 +46,9 @@
 
 	const NL_OPTS = ode(H_OPTS).length;
 
-	export let b_mode_nobody: boolean;
-	export let si_assertion: SemanticQuality;
-
 	let f_apply: (k_deduction: Deduction) => Deduction = k => k;
 
-	let si_selected: string = 'none';
+	export let si_selected: string = 'none';
 
 	let dm_action!: HTMLElement;
 
@@ -75,7 +72,7 @@
 		margin-left: 1.5em;
 		width: 350px;
 		position: absolute;
-		top: -5px;
+		margin-top: -5px;
 
 		.action-opt {
 			flex: 1;
@@ -85,6 +82,7 @@
 			border-style: solid;
 			border-width: 1px 0;
 			border-color: fade(white, 20%);
+			border-radius: 0;
 
 			cursor: pointer;
 
@@ -121,17 +119,19 @@
 
 		.opt-lft {
 			border-left-width: 1px;
-			border-radius: 5px 0 0 5px;
+			border-top-left-radius: 5px;
+			border-bottom-left-radius: 5px;
 		}
 
 		.opt-rgt {
 			border-right-width: 1px;
-			border-radius: 0 5px 5px 0;
+			border-top-right-radius: 5px;
+			border-bottom-right-radius: 5px;
 		}
 	}
 </style>
 
-<span class="action" bind:this={dm_action}>
+<span class="action" style="width:{100 * NL_OPTS}px;" bind:this={dm_action}>
 	{#each ode(H_OPTS) as [si_opt, g_opt], i_opt}
 		<span class="action-opt {0 === i_opt? 'opt-lft': ''} {NL_OPTS-1 === i_opt? 'opt-rgt': 'opt-mid'}" data-opt="{si_opt}" on:click={() => select_opt(si_opt)} class:selected={si_opt === si_selected}>
 			<span class="action-opt-icon">

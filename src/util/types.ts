@@ -1,4 +1,6 @@
 
+export type Hash = Record<string, string>;
+
 export interface JsonObject {
 	[k: string]: JsonValue | undefined;
 }

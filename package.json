@@ -5,6 +5,7 @@
   "scripts": {
     "build": "vite build --mode production",
     "dev": "vite --mode dev",
+    "test": "vite --mode test",
     "start": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
@@ -31,6 +32,7 @@
     "@fortawesome/free-regular-svg-icons": "^5.15.4",
     "@fortawesome/free-solid-svg-icons": "^5.15.4",
     "@tweenjs/tween.js": "^18.6.4",
+    "gretchen": "^1.5.0",
     "svelte-fa": "^2.4.0",
     "three": "^0.134.0",
     "vite": "^2.6.14"

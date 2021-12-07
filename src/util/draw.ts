@@ -90,6 +90,7 @@ export function draw_shape(d_ctx: CanvasRenderingContext2D, x_center: number, x_
 	d_ctx.fillStyle = H_COLORS[si_color].color;
 	d_ctx.fill(yp_shape);
 
+	d_ctx.globalAlpha = 1;
 	d_ctx.strokeStyle = 'black';
 	d_ctx.lineWidth = Math.round(Math.sqrt(x_area) / 50);
 	d_ctx.stroke(yp_shape);

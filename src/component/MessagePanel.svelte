@@ -14,6 +14,7 @@
 
 	export interface MessagePanelHelper {
 		reveal_text(s_reveal: string, xt_interval?: number, xt_pause?: number): Promise<void>;
+		spinning(b_spin: boolean): void;
 		commit(): Promise<void>;
 		receive(g_msg: ReceivedMessage): Promise<void>;
 		arbiter(z_text: TextInput, h_widgets?: Widgets): Promise<void>;
@@ -69,9 +70,11 @@
 	} from '#/intl/game';
 
 	import {
+		Killables,
 		microtask,
 		ode,
-		oder, timeout,
+		oder,
+		timeout,
 	} from '#/util/belt';
 
 	import type {
@@ -94,6 +97,7 @@
 	// export helper
 	export const k_panel: MessagePanelHelper = {
 		reveal_text,
+		spinning,
 		commit,
 		receive,
 		arbiter,
@@ -108,9 +112,15 @@
 	};
 
 	/**
+	 * killable intervals and timeouts
+	 */
+	export let k_killables: Killables;
+
+	/**
 	 * msg-history
 	 */
 	let dm_history: HTMLDivElement;
+	let dm_history_data: HTMLDivElement;
 
 	let dm_panel: HTMLDivElement;
 
@@ -151,6 +161,14 @@
 		// set latest
 		let i_latest = ++i_iter;
 
+		// clear spinner
+		if(i_spinning) {
+			s_spinner = '';
+			k_killables.delInterval(i_spinning);
+			i_spin = 0;
+			i_spinning = 0;
+		}
+
 		if(!xt_interval) xt_interval = 60;
 
 		const nl_text = s_text.length;
@@ -190,6 +208,35 @@
 
 			// no longer latest; bail
 			if(i_iter !== i_latest) return;
+		}
+	}
+
+
+	const A_SPIN = ['◜ ◝', ' ˉ◞', ' ˍ◝', '◟ ◞', '◜ˍ ', '◟ˉ '];
+	let s_spinner = '';
+	let i_spinning = 0;
+	let i_spin = 0;
+	async function spinning(b_spin: boolean) {
+		if(b_spin) {
+			if(!i_spinning) {
+				const s_restore = s_text;
+				await reveal_text(s_restore+' '+A_SPIN[A_SPIN.length-1]+' ');
+				s_text = s_restore;
+
+				function spin() {
+					s_spinner = ' '+A_SPIN[i_spin++]+' ';
+					i_spin %= A_SPIN.length;
+				}
+
+				spin();
+				i_spinning = k_killables.addInterval(spin, 100);
+			}
+		}
+		else if(i_spinning) {
+			s_spinner = '';
+			k_killables.delInterval(i_spinning);
+			i_spin = 0;
+			i_spinning = 0;
 		}
 	}
 
@@ -293,10 +340,12 @@
 			class: 'curtain',
 		});
 
-		dm_history.append(dm_line);
-		dm_history.append(dm_curtain);
+		dm_history_data.append(dm_line);
+		dm_history_data.append(dm_curtain);
 
-		const g_rect_parent = dm_history.getBoundingClientRect();
+		dm_history.scrollTop = dm_history.scrollHeight;
+
+		const g_rect_parent = dm_history_data.getBoundingClientRect();
 		const g_rect_line = dm_line.getBoundingClientRect();
 
 		const x_top = g_rect_line.top - g_rect_parent.top;
@@ -493,7 +542,8 @@
 </script>
 
 <style lang="less">
-	@user-color: #bfbfff;
+	@import './common.less';
+
 	@ease-in-out-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 
 	@keyframes blink {
@@ -635,12 +685,17 @@
 	.msg-history {
 		.console-bg();
 		border-radius: @console-border @console-border 0 0;
-
-		height: 270px;
+		
 		position: relative;
+		height: 270px;
+		overflow-y: scroll;
+	}
+		
+	.msg-history-scroll {
+		// position: static;
+		// bottom: 0;
 		font-size: 12px;
-		padding: 8px;
-		padding-bottom: 2px;
+		padding: 35px 8px 2px 8px;
 
 		display: flex;
 		justify-content: flex-end;
@@ -674,11 +729,11 @@
 		}
 
 		:global(.from-arbiter) {
-			color: rgb(190, 255, 190);
+			color: @arbiter-color;
 		}
 
 		:global(.from-opponent) {
-			color: #fcc080;
+			color: @opponent-color;
 		}
 
 		:global(.from-user) {
@@ -780,9 +835,11 @@
 </style>
 
 <div class="msg-panel" bind:this={dm_panel}>
-	<div class="msg-history" bind:this={dm_history} />
+	<div class="msg-history" bind:this={dm_history}>
+		<div class="msg-history-scroll" bind:this={dm_history_data} />
+	</div>
 	<div class="msg-console">
-		<span class="text">&gt;&nbsp;{s_text}</span>
+		<span class="text">&gt;&nbsp;{s_text}{s_spinner}</span>
 		<span class="cursor blinking" bind:this={dm_cursor}>&nbsp;</span>
 		{#if s_evaluation}
 			<span class="msg-console-eval"

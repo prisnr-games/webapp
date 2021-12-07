@@ -68,11 +68,17 @@ export function use_assertion_in_sentence(si_assertion: SemanticAssertion): stri
 	return `${'nobody_has' === si_basis? 'nobody has ': 'my chip is'} ${use_quality_in_sentence(si_quality)}`;
 }
 
-export interface GuessOption {
+export interface CanonicalGuessOption {
 	target: CanonicalTarget;
 	color: CanonicalColor;
 	shape: CanonicalShape;
-}
+};
+
+export type GuessOption = CanonicalGuessOption | {
+	target: 'abstain';
+	color: null;
+	shape: null;
+};
 
 export class Deduction {
 	protected _xm_deduce: number;
@@ -129,7 +135,7 @@ export class Deduction {
 		].join('\n');
 	}
 
-	enumerate(si_target: CanonicalTarget): GuessOption[] {
+	enumerate(si_target: CanonicalTarget): CanonicalGuessOption[] {
 		let xm_known = 'bag' === si_target? this._xm_deduce >> 8: this._xm_deduce & 0xff;
 
 		const a_colors: CanonicalColor[] = [];
@@ -148,7 +154,7 @@ export class Deduction {
 		}
 
 		// pairwise combinations
-		const a_out: GuessOption[] = [];
+		const a_out: CanonicalGuessOption[] = [];
 		for(const si_color of a_colors) {
 			for(const si_shape of a_shapes) {
 				a_out.push({

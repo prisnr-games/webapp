@@ -45,6 +45,7 @@
 		A_BASES,
 		CanonicalBasis,
 		H_BASES,
+CanonicalTarget,
 	} from '#/intl/game';
 
 	import {
@@ -89,7 +90,9 @@
 	} from '#/util/belt';
 
 	import {
+CanonicalGuessOption,
 		Deduction,
+		GuessOption,
 		use_assertion_in_sentence,
 		use_quality_in_sentence,
 	} from '#/util/logic';
@@ -118,8 +121,10 @@
 	import {
 		ContractError,
 		ContractExecInfo,
+		EtaEstimator,
 		GameContract,
 		GameStateResponse,
+		GuessResponse,
 		JoinResponse,
 		P_CONTRACT_ADDR,
 		QueryGameStateResponse,
@@ -528,7 +533,7 @@
 
 		// first time adding
 		if(Date.now() - xt_suggest > XTL_SECONDS) {
-			k_panel.warn(`Now that you've added this chain, please make sure to switch to "${S_CHAIN_NAME}" in Keplr!`);
+			await k_panel.warn(`Please make sure your network is set to "${S_CHAIN_NAME}" in Keplr!`);
 			await timeout(2100);
 		}
 
@@ -554,7 +559,7 @@
 			h_permits = k_ls.get<Record<string, Permit>>('permits');
 		}
 		catch(e_decrypt: unknown) {
-			k_panel.warn('Change in passphrase detected. Clearing old query perrmits.');
+			await k_panel.warn('Change in passphrase detected. Clearing old query perrmits.');
 			k_ls.clear();
 		}
 
@@ -729,17 +734,6 @@
 		return g_game_query;
 	}
 
-	const A_SPIN = ['◜ ◝', ' ˉ◞', ' ˍ◝', '◟ ◞', '◜ˍ ', '◟ˉ '];
-	async function spinner(s_loading: string): Promise<number> {
-		await k_panel.reveal_text(s_loading+' ');
-
-		let i_spin = 0;
-		return k_killables.addInterval(() => {
-			k_panel.reveal_text(s_loading+' '+A_SPIN[i_spin++]+' ', 5);
-			i_spin %= A_SPIN.length;
-		}, 200);
-	}
-
 	// audio
 	const H_AUDIO_SRC = {
 		epic_transition: 'epic-transition.wav',
@@ -892,32 +886,25 @@
 
 		// a game was started
 		if(h_cookie.game) {
-			let i_spinning = 0;
-			spinner('checking for active game...').then(i => i_spinning = i);
+			let b_waiting = true;
+			k_panel.reveal_text('checking for active game...').then(() => b_waiting && k_panel.spinning(true));
 
 			// check for active game
 			let g_game_contd!: GameStateResponse | undefined;
 			try {
-				g_game_contd = await k_game.queryGameState();
+				try {
+					g_game_contd = await k_game.queryGameState();
+				}
+				finally {
+					// no longer waiting
+					b_waiting = false;
+
+					// clear text and stop spinning
+					k_panel.reveal_text('');
+				}
 			}
 			catch(e_query) {
 				debugger;
-			}
-			finally {
-				if(i_spinning) {
-					k_killables.delInterval(i_spinning);
-				}
-				else {
-					const i_kill = window.setInterval(() => {
-						if(i_spinning) {
-							clearInterval(i_kill);
-							k_killables.delInterval(i_spinning);
-						}
-					}, 100);
-				}
-
-				// clear
-				k_panel.reveal_text('');
 			}
 
 			// continue game
@@ -965,28 +952,37 @@
 		// beat
 		await timeout(s_last_seen? 800: 4.6e3);
 
+		return try_join();
+	});
+
+	async function try_join(): Promise<void> {
 		// ask if ready to join
 		await k_panel.reveal_text('ready to play?');
 
 		// join a game
 		await k_prompt.ok('Join a game');
 
-		// while transaction is verified
-		let i_spinning = 0;
-		
-		// wait
-		spinner('waiting for transaction to be verified... ').then(i => i_spinning = i);
+		// wait for transaction is verified
+		let b_waiting = true;
+		k_panel.reveal_text('waiting for transaction to be verified... ').then(() => b_waiting && k_panel.spinning(true));
 
 		// attempt to join
 		let g_join: ContractExecInfo<JoinResponse>;
 		try {
-			g_join = await k_game.joinGame();
+			try {
+				g_join = await k_game.joinGame();
+			}
+			finally {
+				// no longer waiting
+				b_waiting = false;
+
+				// clear text and stop spinning
+				k_panel.reveal_text('');
+			}
 		}
 		// failed
 		catch(e_join: unknown) {
 			console.error(e_join);
-
-			k_killables.delInterval(i_spinning);
 
 			// error
 			if(e_join instanceof Error) {
@@ -1008,6 +1004,29 @@
 				else if(/contract not found/i.test(se_join)) {
 					return fatal(`Contract not found! Are you on the right network?`);
 				}
+				// timeout
+				else if(/timed out/.test(se_join)) {
+					await k_panel.warn(`There was a timeout error while waiting for the transaction to be included. Waiting to see if it gets included...`);
+
+					await timeout(5000);
+
+					try {
+						g_join = {
+							data: {
+								join: {
+									status: 'simulated',
+									game_state: await k_game.queryGameState(),
+								},
+							},
+						} as ContractExecInfo<JoinResponse>;
+					}
+					catch(e_query: unknown) {
+						await k_panel.error([`Timeout error. Please try again with higher gas fee.`, se_join]);
+
+						// retry
+						return try_join();
+					}
+				}
 				// unhandled
 				else {
 					debugger;
@@ -1021,8 +1040,6 @@
 		}
 
 		console.log(g_join);
-
-		k_killables.delInterval(i_spinning);
 
 		// clear prompt
 		k_panel.reveal_text('');
@@ -1066,7 +1083,7 @@
 			console.error(g_game);
 			return fatal('game completed?');
 		}
-	});
+	}
 
 	function update_player_state(g_game: GameStateResponse) {
 		si_player_color = g_game.chip_color!.split(':')[1] as CanonicalColor;
@@ -1156,8 +1173,11 @@
 			// hide transmission controls
 			k_tx.hide();
 
-			// lock submit buttono
+			// lock submit button
 			k_panel.submittable(null);
+
+			// start spinning
+			k_panel.spinning(true);
 
 			// submit assertion
 			let g_response: ContractExecInfo<SubmitResponse>;
@@ -1207,10 +1227,19 @@
 			k_panel.unsubmittable();
 
 			// commit text to message history
-			k_panel.commit();
+			await k_panel.commit();
 
 			// proceed to next state
-			round_1b(g_data.submit?.game_state!);
+			const g_game = g_data.submit?.game_state!
+
+			// player just submitted 2nd assertion
+			if(g_game.second_submit) {
+				round_1c(g_game);
+			}
+			// player just submitted 1st assertion
+			else {
+				round_1b(g_game);
+			}
 		}, s_tag);
 	}
 
@@ -1257,9 +1286,9 @@
 
 		// countdown timer
 		{
-			const xt_eta = Date.now() + (10 * XTL_MINUTES);
+			const k_eta = new EtaEstimator(g_game.first_round_start_block+'');
 			k_countdown_1a = new Countdown({
-				eta: () => xt_eta,
+				eta: () => k_eta.eta,
 				kill_text: 'successfully submitted',
 			});
 
@@ -1305,9 +1334,9 @@
 				if(k_countdown_1a) k_countdown_1a.kill('already submittted');
 
 				// opponent's time remaining
-				const xt_eta = Date.now() + (10 * XTL_MINUTES);
+				const k_eta = new EtaEstimator(g_game.first_round_start_block+'')
 				k_countdown_1a2 = new Countdown({
-					eta: () => xt_eta,
+					eta: () => k_eta.eta,
 					kill_text: 'also submitted theirs',
 				});
 
@@ -1368,7 +1397,7 @@
 			});
 		
 			// inform user
-			k_panel.arbiter(`
+			await k_panel.arbiter(`
 				The other player tried to deceive you by submitting a false assertion. You would have known it's false given what you know about your chip and your hint.
 				
 				Instead, I will now reveal to you one of their secrets. They will not know that I have done any of this.
@@ -1415,7 +1444,7 @@
 			});
 
 			// make statement
-			k_panel.opponent([
+			await k_panel.opponent([
 				`${proper(use_assertion_in_sentence(si_opponent_assertion))} {premise}`,
 			], {
 				premise: dm_premise,
@@ -1440,9 +1469,9 @@
 			await timeout(4.1e3);
 		}
 
-		const xt_eta = Date.now() + 10*XTL_MINUTES;
+		const k_eta = new EtaEstimator(g_game.second_submit_turn_start_block+'');
 		k_countdown_1b = new Countdown({
-			eta: () => xt_eta,
+			eta: () => k_eta.eta,
 			kill_text: 'already submitted',
 		});
 
@@ -1467,6 +1496,8 @@
 	let k_countdown_1b2: Countdown;
 	let k_countdown_1c: Countdown;
 
+	let k_countdown_1c2: Countdown;
+
 	async function round_1c(g_game: GameStateResponse, b_resumed=false): Promise<void> {
 		// 
 		const {
@@ -1483,9 +1514,9 @@
 				if(k_countdown_1b2) k_countdown_1b2.kill();
 				
 				// opponent's time remaining
-				const xt_eta = Date.now() + (10 * XTL_MINUTES);
+				const k_eta = new EtaEstimator(g_game.second_submit_turn_start_block+'')
 				k_countdown_1c = new Countdown({
-					eta: () => xt_eta,
+					eta: () => k_eta.eta,
 					kill_text: 'also submitted theirs',
 				});
 
@@ -1542,7 +1573,7 @@
 			});
 		
 			// inform user
-			k_panel.arbiter(`
+			await k_panel.arbiter(`
 				The other player tried to deceive you by submitting a false assertion. You would have known it's false given what you know about your chip and your hint.
 				
 				Instead, I will now reveal to you one of their secrets. They will not know that I have done any of this.
@@ -1582,7 +1613,7 @@
 			});
 
 			// make statement
-			k_panel.opponent([
+			await k_panel.opponent([
 				`${proper(use_assertion_in_sentence(si_opponent_assertion))} {premise}`,
 			], {
 				premise: dm_premise,
@@ -1593,10 +1624,246 @@
 			return fatal(`Fatal system error: unable to parse game state`);
 		}
 
+		const k_eta = new EtaEstimator(g_game.guess_turn_start_block+'');
+		k_countdown_1c2 = new Countdown({
+			eta: () => k_eta.eta,
+			kill_text: 'successfully submitted',
+		});
+
+		// instruction
+		await k_panel.arbiter(`
+			The time has come for you to surmise my secrets. You may either guess what is in my bag, what your opponent has, or abstain completely. You have {clock_icon}{time_remaining}.
+
+			The precedence for winning is as follows:
+			- [Guess wrong] < [Abstain] < [Correctly guess arbiter's bag] < [Corrrectly guess opponent's chip]
+
+			Use the inline widgets next to each assertion above to logically reduce your option space.
+		`, {
+			clock_icon: k_countdown_1c2.clock,
+			time_remaining: k_countdown_1c2.store,
+		});
+
 		// accept guess
 		await k_decision.show();
 
 		console.log(g_game);
+	}
+
+	function prepare_guess(g_opt: GuessOption) {
+		k_panel.submittable(async () => {
+			// lock submit button
+			k_panel.submittable(null);
+
+			// start spinning
+			k_panel.spinning(true);
+
+			let g_guess: GuessResponse;
+			try {
+				try {
+					g_guess = (await k_game.submitGuess(g_opt)).data;
+				}
+				finally {
+					void k_panel.commit();
+					void k_panel.reveal_text('');
+				}
+			}
+			catch(e_submit: unknown) {
+				if(e_submit instanceof Error) {
+					await k_panel.error(`Unhandled error: ${e_submit.stack}`);
+				}
+				else {
+					await k_panel.error(`Unknown error: ${e_submit}`);
+				}
+
+				return;
+			}
+
+			if(g_guess.error) {
+				await k_panel.error(`Contract error: ${g_guess.error}`);
+				return;
+			}
+
+			// stop countdown for guess submissioin
+			k_countdown_1c2.kill();
+
+			const g_game = g_guess.guess!.game_state!;
+
+			// proceed to final stage
+			void round_1d(g_game);
+		});
+	}
+
+	let b_notif_1d_result = false;
+	let b_notif_1d_waiting = false;
+	let k_countdown_1d: Countdown;
+
+	async function round_1d(g_game: GameStateResponse, b_resumed=false): Promise<void> {
+		const {
+			round_result: si_round,
+			round: i_round,
+			result: si_outcome,
+		} = g_game;
+
+		let b_wrong = false;
+
+		// notify user about the correctness of their guess
+		if(si_round && !b_notif_1d_result) {
+			b_notif_1d_result = true;
+
+			const [si_target, si_correctness] = si_round!.split('|') as [CanonicalTarget, 'correct' | 'wrong'];
+
+			if('wrong' === si_correctness) {
+				await k_panel.arbiter(`
+					Sorry, your guess about ${'opponent' === si_target? `your opponent's chip`: `my bag`} was wrong.
+					
+					Guessing wrong is the worst because you automatically lose your wager. Consider abstaining next time if you're unsure.
+				`);
+
+				b_wrong = true;
+			}
+			else {
+				await k_panel.arbiter(`Nicely done, your guess about ${'opponent' === si_target? `your opponent's chip`: `my bag`} was correct!`);
+			}
+		}
+
+		// still waiting on other player
+		if(1 === i_round) {
+			if(!b_notif_1d_waiting) {
+				b_notif_1d_waiting = true;
+
+				const k_eta = new EtaEstimator(g_game.guess_turn_start_block+'');
+				k_countdown_1d = new Countdown({
+					eta: () => k_eta.eta,
+					kill_text: 'now already submitted',
+				});
+
+				await k_panel.arbiter(`${b_wrong? 'Even though you lost': 'However'}, I am still waiting for a guess from your opponent. They have {clock_icon}{time_remaining}`, {
+					clock_icon: k_countdown_1d.clock,
+					time_remainin: k_countdown_1d.store,
+				});
+			}
+
+			// pause
+			await timeout(5000);
+
+			// retry
+			return round_1d(await k_game.queryGameState());
+		}
+
+		// kill countdowns
+		if(k_countdown_1d) k_countdown_1d.kill();
+
+		// game is over
+		if(si_outcome) {
+			// summarize opponent's action
+			const {
+				opponent_round_result: si_opp_round,
+				opponent_guess: si_opp_guess,
+			} = g_game;
+
+			const [si_opp_guess_target, si_opp_guess_color, si_opp_guess_shape] = si_opp_guess!.split(/|/g);
+			const [, si_opp_correctness] = si_opp_round!.split('|');
+
+			let s_opp_summary = '';
+			let b_opp_wrong = false;
+			if('abstain' === si_opp_guess_target) {
+				s_opp_summary = 'abstained from guessing';
+			}
+			else {
+				const s_guess = H_COLORS[si_opp_guess_color as CanonicalColor].labels[s_lang]+' '+H_SHAPES[si_opp_guess_shape as CanonicalShape].labels[s_lang];
+				
+				b_opp_wrong = 'correct' !== si_opp_correctness;
+
+				s_opp_summary = `${b_opp_wrong? 'wrongly': 'correctly'} guessed that ${'bag' === si_opp_guess_target? 'my bag': 'your chip'} is the ${s_guess}`;
+			}
+
+			if('you lost wager' === si_outcome) {
+				const s_opponent_prelude = b_opp_wrong
+					? `But you'll be happy to know that your opponent`
+					: 'Your opponent';
+
+				await k_panel.arbiter([
+					`${b_wrong? 'As you already know': 'Bad news'}, you lost your wager. ${s_opponent_prelude} ${s_opp_summary}, so they ${b_opp_wrong? 'also lost their wager': 'won and gained your lost wager'}.`,
+				]);
+
+				await timeout(9e3);
+
+				return fatal('Game over. Reload to play again.');
+			}
+			else if('you won wager' === si_outcome) {
+				await k_panel.arbiter([
+					`Congratulations, you won! Your opponent ${s_opp_summary}, so they lost their wager and you earned SCRT.`,
+				]);
+
+				await timeout(9e3);
+
+				return fatal('Game over. Reload to play again.');
+			}
+			else {
+				await k_panel.arbiter([
+					`Well done. You and your opponent have tied, so you both can claim a reward. They ${s_opp_summary}.`,
+				]);
+
+				if(!b_resumed) await timeout(4e3);
+			}
+
+			if(3 === g_game.round) {
+				void round_3(g_game);
+			}
+		}
+	}
+
+
+	let k_countdown_3: Countdown;
+
+	async function round_3(g_game: GameStateResponse, b_resumed=false): Promise<void> {
+
+		const k_eta = new EtaEstimator(g_game.pick_reward_round_start_block!+'');
+		k_countdown_3 = new Countdown({
+			eta: () => k_eta.eta,
+			kill_text: 'made your decision'
+		});
+
+		k_panel.arbiter(`
+			Congratulations on passing round 1 together! I have two rewards to choose from, a jackpot of SCRT, or an NFT that can be used to give you special powers next time you play.
+
+			However, if you both attempt to claim the same prize, then neither of you will take it. You will only be able to take a reward if you and your opponent claim different things.
+
+			You have {clock_icon}{time_remaining}.
+		`, {
+			clock_icon: k_countdown_3.clock,
+			time_remaining: k_countdown_3.store,
+		});
+	}
+
+	async function select_abstain() {
+		k_panel.submittable(null);
+
+		await k_panel.reveal_text(`i abstain from guessing this round`, 30);
+
+		prepare_guess({
+			target: 'abstain',
+			color: null,
+			shape: null,
+		});
+	}
+
+	async function select_decision({detail:g_opt}: CustomEvent<CanonicalGuessOption>) {
+		k_panel.submittable(null);
+
+		let s_guess = '';
+		if('bag' === g_opt.target) {
+			s_guess += `the arbiter's bag is: a `;
+		}
+		else {
+			s_guess += `my opponent's chip is: a `;
+		}
+
+		s_guess += H_COLORS[g_opt.color].labels[s_lang]+' '+H_SHAPES[g_opt.shape].labels[s_lang];
+
+		await k_panel.reveal_text(`${s_guess}`, 30);
+
+		prepare_guess(g_opt);
 	}
 
 
@@ -1716,7 +1983,7 @@
 	{/if}
 </div>
 
-<MessagePanel bind:k_panel />
+<MessagePanel bind:k_panel {k_killables} />
 
 
 <div class="surprise" bind:this={dm_surprise}>
@@ -1728,7 +1995,7 @@
 
 	<Assertion bind:k_tx on:basis={select_basis} on:quality={select_quality} />
 
-	<Decision bind:k_decision {k_deduced} />
+	<Decision bind:k_decision {k_deduced} on:abstain={select_abstain} on:change={select_decision} />
 
 	{#if si_player_hint}
 		<div class="mine" transition:blur={{duration:2.4e3, easing:quadInOut, delay: 4.5e3}}>

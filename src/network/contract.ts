@@ -1,5 +1,7 @@
-import type { CanonicalBasis, CanonicalColor, CanonicalShape } from '#/intl/game';
-import type { SemanticAssertion, SemanticAssertion_Nobody, SemanticColorQuality, SemanticQuality, SemanticShapeQuality } from '#/util/logic';
+import type { CanonicalBasis, CanonicalColor, CanonicalShape, CanonicalTarget } from '#/intl/game';
+import { XTL_MINUTES, XTL_SECONDS } from '#/util/belt';
+import { get_json } from '#/util/fetch';
+import type { GuessOption, SemanticAssertion, SemanticAssertion_Nobody, SemanticColorQuality, SemanticQuality, SemanticShapeQuality } from '#/util/logic';
 import type { JsonValue } from '#/util/types';
 import type {
 	Coin, JsonObject, StdFee,
@@ -8,6 +10,10 @@ import type {
 import type {
 	Permit,
 } from "./permits";
+
+import {
+	P_LCD_RPC, SI_CHAIN,
+} from './wallet';
 
 import type {
 	Wallet,
@@ -46,6 +52,11 @@ const d_decoder = new TextDecoder();
 interface Response {
 	status: String,
 }
+
+type SemanticGuess = `target:${CanonicalTarget}|${SemanticColorQuality}|${SemanticShapeQuality}`;
+type SemanticGuessResult = `${'bag' | 'opponent'}|${'correct' | 'wrong'}` | 'abstain';
+
+type SemanticOutcome = `you ${`${'won' | 'lost'} wager` | 'won jackpot' | 'won nft' | 'lost reward'}`;
 
 export interface GameStateResponse {
 	// 0: waiting for second player, 1: first round, 3: reward round
@@ -86,25 +97,40 @@ export interface GameStateResponse {
 	//    {target} is one of "abstain", "bag", "opponent"
 	//    {color} is one of "red", "green", "blue", "black", "" (in case of abstain)
 	//    {shape} is one of "triange", "square", "circle", "star", "" (in case of abstain)
-	guess: string | null,
+	guess: SemanticGuess | null,
 	
 	// same as guess
 	opponent_guess: string | null,
 
 	// one of "bag|correct", "bag|wrong", "opponent|correct", "opponent|wrong", "abstain"
-	round_result: string | null,
+	round_result: SemanticGuessResult | null,
+
 	// same as round_result
-	opponent_round_result: string | null,
+	opponent_round_result: SemanticGuessResult | null,
 
 	// indicates game is finished (null if second player has not joined, yet)
 	finished: boolean | null,
 
 	// one of "you won wager", "you lost wager", "you won jackpot", "you won nft", "you lost reward"
-	result: string | null,
+	result: SemanticOutcome | null,
+
+	first_round_start_block: number;
+
+	first_submit_block: number;
+
+	guess_block: number;
+
+	guess_turn_start_block: number;
+
+	pick_reward_round_start_block: number;
+
+	second_submit_block: number;
+
+	second_submit_turn_start_block: number;
 }
 
 interface InnerResponse {
-	status: Response,
+	status: string,
 	game_state: GameStateResponse | null,
 }
 
@@ -222,6 +248,20 @@ export class GameContract {
 				...g_quality,
 			},
 		} as SubmitMsg, {
+			amount: [
+				{
+					amount: '10000',
+					denom: 'uscrt',
+				},
+			],
+			gas: '40000',
+		});
+	}
+
+	submitGuess(g_opt: GuessOption): Promise<ContractExecInfo<GuessResponse>> {
+		return this.execute<GuessResponse>({
+			guess: g_opt,
+		} as GuessMsg, {
 			amount: [
 				{
 					amount: '10000',
@@ -398,3 +438,184 @@ export class GameContract {
 // 		return { error: error.toString() };
 // 	}
 // }
+
+type FrequencyTuner = (k_eta: EtaEstimator) => boolean;
+
+const F_FREQ_DEFAULT: FrequencyTuner = (k_eta: EtaEstimator) => {
+	// once less than a minute remains
+	if(k_eta.remaining < 60*XTL_SECONDS) {
+		// update every 5 seconds
+		return (Date.now() - k_eta.lastUpdated) > 5 * XTL_SECONDS;
+	}
+	// otherwise
+	else {
+		// update every 30 seconds
+		return (Date.now() - k_eta.lastUpdated) > 30 * XTL_SECONDS;
+	}
+};
+
+interface RpcResponse<Result extends JsonObject> extends JsonObject {
+	jsnorpc: string;
+	id: number;
+	result: Result;
+}
+
+interface BlockId {
+	hash: string;
+	parts: {
+		total: number;
+		hash: string;
+	};
+}
+
+interface BlockRpcResponse extends JsonObject {
+	block_id: BlockId;
+	block: {
+		header: {
+			version: {
+				block: string;
+			};
+			chain_id: string;
+			height: string;
+			time: string;
+			last_block_id: BlockId;
+			last_commit_hash: string;
+			data_hash: string;
+			validators_hash: string;
+			next_validators_hash: string;
+			consensus_hash: string;
+			app_hash: string;
+			last_results_hash: string;
+			evidence_hash: string;
+			proposer_address: string;
+		};
+		data: {
+			txns: string[];
+		};
+		last_commit: {
+			height: string;
+			round: number;
+			block_id: BlockId;
+			signatures: {
+				block_id_flag: number;
+				validator_address: string;
+				timestamp: string;
+				signature: string;
+			}[];
+		};
+	};
+}
+
+interface StatusRpcResponse extends JsonObject {
+	node_info: {
+		protocol_version: {
+			p2p: string;
+			block: string;
+			app: string;
+		};
+		id: string;
+		listen_addr: string;
+		network: string;
+		version: string;
+		channels: string;
+		moniker: string;
+		other: {
+			tx_index: string;
+			rpc_address: string;
+		};
+	};
+	sync_info: {
+		latest_block_hash: string;
+		latest_app_hash: string;
+		latest_block_height: string;
+		latest_block_time: string;
+		earliest_block_hash: string;
+		earliest_app_hash: string;
+		earliest_block_height: string;
+		earliest_block_time: string;
+		catching_up: boolean;
+	};
+	validator_info: {
+		address: string;
+		pub_key: {
+			type: string;
+			value: string;
+		},
+		voting_power: string;
+	};
+}
+
+const XTL_BLOCK_TIME_AVG = SI_CHAIN.startsWith('pulsar')? 1.98*XTL_SECONDS: 5.99*XTL_SECONDS
+const N_BLOCKS_PER_5_MIN = Math.floor((5*XTL_MINUTES) / XTL_BLOCK_TIME_AVG);
+console.log(`Imposing global ${N_BLOCKS_PER_5_MIN} blocks per 5 minutes estimate`);
+
+export class EtaEstimator {
+	protected _xg_block_start: bigint;
+	protected _xt_start = 0;
+	protected _i_block_dest: bigint;
+	protected _f_should_update: () => boolean;
+	protected _xt_eta = 0;
+	protected _xt_updated = 0;
+
+	constructor(w_block_start: string | bigint, n_blocks_elapse=N_BLOCKS_PER_5_MIN, f_frequency=F_FREQ_DEFAULT) {
+		this._xg_block_start = BigInt(w_block_start);
+		this._i_block_dest = this._xg_block_start + BigInt(n_blocks_elapse);
+		this._f_should_update = () => f_frequency(this);
+	}
+
+	protected async fetch_start_time(): Promise<void> {
+		const du_endpoint = new URL(P_LCD_RPC);
+		du_endpoint.pathname = '/block';
+
+		const g_res = await get_json<RpcResponse<BlockRpcResponse>>(du_endpoint.href, {
+			search: {
+				block: this._xg_block_start+'',
+			},
+		});
+
+		this._xt_start = (new Date(g_res.data!.result.block.header.time)).getTime();
+	}
+
+	protected async estimate(): Promise<number> {
+		if(!this._xt_start) {
+			await this.fetch_start_time();
+		}
+
+		const du_endpoint = new URL(P_LCD_RPC);
+		du_endpoint.pathname = '/status';
+
+		const g_res = await get_json<RpcResponse<StatusRpcResponse>>(du_endpoint.href);
+
+		const {
+			latest_block_height: s_latest_height,
+			latest_block_time: s_latest_time,
+		} = g_res.data!.result.sync_info;
+
+		const xg_latest = BigInt(s_latest_height);
+		const xt_latest = (new Date(s_latest_time)).getTime();
+
+		const xtl_per_block = (xt_latest - this._xt_start) / Number((xg_latest - this._xg_block_start));
+
+		const n_blocks_remaining = Number(this._i_block_dest - xg_latest);
+
+		const xt_now = this._xt_updated = Date.now();
+
+		return this._xt_eta = xt_now + Math.round(n_blocks_remaining * xtl_per_block);
+	}
+
+	get lastUpdated(): number {
+		return this._xt_updated;
+	}
+
+	get eta(): number {
+		if(this._f_should_update()) {
+			void this.estimate();
+		}
+
+		return this._xt_eta || Date.now();
+	}
+
+	get remaining(): number {
+		return this._xt_eta - Date.now();
+	}
+}

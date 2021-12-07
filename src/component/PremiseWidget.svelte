@@ -24,7 +24,8 @@
 		faDotCircle,
 		faMinusCircle,
 		faTooth,
-faCheck,
+		faEgg,
+		faCheck,
 	} from '@fortawesome/free-solid-svg-icons';
 
 	import {
@@ -70,7 +71,7 @@ faCheck,
 				ignore: {
 					label: proper(si_known),
 					icon: ({
-						undeniable: faTooth,
+						undeniable: faEgg,
 						true: faCheck,
 						verified: faCheck,
 					})[si_known],

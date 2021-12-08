@@ -1,6 +1,7 @@
 import {
 	A_COLORS,
 	A_SHAPES,
+	H_COLORS,
 } from '#/intl/game';
 
 import type {

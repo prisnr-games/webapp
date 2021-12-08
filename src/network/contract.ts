@@ -1,4 +1,4 @@
-import type { CanonicalBasis, CanonicalColor, CanonicalShape, CanonicalTarget } from '#/intl/game';
+import type { CanonicalBasis, CanonicalColor, CanonicalShape, CanonicalTarget, PickOption } from '#/intl/game';
 import { XTL_MINUTES, XTL_SECONDS } from '#/util/belt';
 import { get_json } from '#/util/fetch';
 import type { GuessOption, SemanticAssertion, SemanticAssertion_Nobody, SemanticColorQuality, SemanticQuality, SemanticShapeQuality } from '#/util/logic';
@@ -53,10 +53,10 @@ interface Response {
 	status: String,
 }
 
-type SemanticGuess = `target:${CanonicalTarget}|${SemanticColorQuality}|${SemanticShapeQuality}`;
-type SemanticGuessResult = `${'bag' | 'opponent'}|${'correct' | 'wrong'}` | 'abstain';
+export type SemanticGuess = `target:${CanonicalTarget}|${SemanticColorQuality}|${SemanticShapeQuality}`;
+export type SemanticGuessResult = `${'bag' | 'opponent'}|${'correct' | 'wrong'}` | 'abstain';
 
-type SemanticOutcome = `you ${`${'won' | 'lost'} wager` | 'won jackpot' | 'won nft' | 'lost reward'}`;
+export type SemanticOutcome = `you ${`${'won' | 'lost'} wager` | 'won jackpot' | 'won nft' | 'lost reward'}`;
 
 export interface GameStateResponse {
 	// 0: waiting for second player, 1: first round, 3: reward round
@@ -121,6 +121,8 @@ export interface GameStateResponse {
 	guess_block: number;
 
 	guess_turn_start_block: number;
+
+	pick: 'nft' | 'jackpot' | null;
 
 	pick_reward_round_start_block: number;
 
@@ -265,6 +267,22 @@ export class GameContract {
 			amount: [
 				{
 					amount: '10000',
+					denom: 'uscrt',
+				},
+			],
+			gas: '40000',
+		});
+	}
+
+	pickReward(si_pick: PickOption): Promise<ContractExecInfo<PickRewardResponse>> {
+		return this.execute<PickRewardResponse>({
+			pick_reward: {
+				reward: 'jackpot' === si_pick? 'pool': si_pick,
+			},
+		} as PickRewardMsg, {
+			amount: [
+				{
+					amount: '1000',
 					denom: 'uscrt',
 				},
 			],
@@ -444,6 +462,11 @@ type FrequencyTuner = (k_eta: EtaEstimator) => boolean;
 const F_FREQ_DEFAULT: FrequencyTuner = (k_eta: EtaEstimator) => {
 	// once less than a minute remains
 	if(k_eta.remaining < 60*XTL_SECONDS) {
+		// expired
+		if(k_eta.latestBlock >= k_eta.destinationBlock) {
+			return false;
+		}
+
 		// update every 5 seconds
 		return (Date.now() - k_eta.lastUpdated) > 5 * XTL_SECONDS;
 	}
@@ -552,14 +575,15 @@ console.log(`Imposing global ${N_BLOCKS_PER_5_MIN} blocks per 5 minutes estimate
 export class EtaEstimator {
 	protected _xg_block_start: bigint;
 	protected _xt_start = 0;
-	protected _i_block_dest: bigint;
+	protected _xg_block_dest: bigint;
 	protected _f_should_update: () => boolean;
 	protected _xt_eta = 0;
+	protected _xg_latest = 0n;
 	protected _xt_updated = 0;
 
 	constructor(w_block_start: string | bigint, n_blocks_elapse=N_BLOCKS_PER_5_MIN, f_frequency=F_FREQ_DEFAULT) {
 		this._xg_block_start = BigInt(w_block_start);
-		this._i_block_dest = this._xg_block_start + BigInt(n_blocks_elapse);
+		this._xg_block_dest = this._xg_block_start + BigInt(n_blocks_elapse);
 		this._f_should_update = () => f_frequency(this);
 	}
 
@@ -591,12 +615,12 @@ export class EtaEstimator {
 			latest_block_time: s_latest_time,
 		} = g_res.data!.result.sync_info;
 
-		const xg_latest = BigInt(s_latest_height);
+		const xg_latest = this._xg_latest =  BigInt(s_latest_height);
 		const xt_latest = (new Date(s_latest_time)).getTime();
 
 		const xtl_per_block = (xt_latest - this._xt_start) / Number((xg_latest - this._xg_block_start));
 
-		const n_blocks_remaining = Number(this._i_block_dest - xg_latest);
+		const n_blocks_remaining = Number(this._xg_block_dest - xg_latest);
 
 		const xt_now = this._xt_updated = Date.now();
 
@@ -605,6 +629,14 @@ export class EtaEstimator {
 
 	get lastUpdated(): number {
 		return this._xt_updated;
+	}
+
+	get latestBlock(): bigint {
+		return this._xg_latest;
+	}
+
+	get destinationBlock(): bigint {
+		return this._xg_block_dest;
 	}
 
 	get eta(): number {

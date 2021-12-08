@@ -118,3 +118,6 @@ export const H_TARGETS = {
 export type CanonicalTarget = keyof typeof H_TARGETS;
 
 export const A_TARGETS = Object.keys(H_TARGETS) as CanonicalTarget[];
+
+
+export type PickOption = 'nft' | 'jackpot';

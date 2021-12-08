@@ -20,7 +20,9 @@ export default defineConfig({
 		svelte(),
 	],
 	build: {
+		target: 'chrome90',
 		sourcemap: true,
+		// minify: import.meta.env.PROD? 'esbuild': false,
 	},
 	 resolve: {
 		  alias: {

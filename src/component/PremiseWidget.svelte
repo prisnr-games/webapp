@@ -107,6 +107,9 @@
 				if('trust' === si_belief) {
 					return k_deduction.nobody(si_assertion);
 				}
+				else if('distrust' === si_belief) {
+					return k_deduction.opponent(si_assertion, true);
+				}
 
 				return k_deduction;
 			};

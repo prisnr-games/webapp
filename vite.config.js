@@ -22,6 +22,7 @@ export default defineConfig({
 	build: {
 		target: 'chrome90',
 		sourcemap: true,
+		emptyOutDir: false,
 		// minify: import.meta.env.PROD? 'esbuild': false,
 	},
 	 resolve: {

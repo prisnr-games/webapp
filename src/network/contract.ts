@@ -20,14 +20,24 @@ import type {
 } from './wallet';
 
 /**
- * contract address
+ * game contract address
  */
-export const P_CONTRACT_ADDR = import.meta.env.VITE_CONTRACT_ADDR;
+ export const P_CONTRACT_GAME_ADDR = import.meta.env.VITE_CONTRACT_GAME_ADDR;
 
 /**
- * contract code hash
+ * game contract code hash
  */
-export const SI_CONTRACT_CODE_HASH = import.meta.env.VITE_CONTRACT_CODE_HASH;
+export const SI_CONTRACT_GAME_CODE_HASH = import.meta.env.VITE_CONTRACT_GAME_CODE_HASH;
+
+/**
+ * minter contract address
+ */
+export const P_CONTRACT_MINTER_ADDR = import.meta.env.VITE_CONTRACT_MINTER_ADDR;
+
+/**
+ * minter contract code hash
+ */
+export const SI_CONTRACT_MINTER_CODE_HASH = import.meta.env.VITE_CONTRACT_MINTER_CODE_HASH;
 
 export class ContractError extends Error {
 	constructor(s_error: string) {

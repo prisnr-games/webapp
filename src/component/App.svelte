@@ -135,7 +135,8 @@
 		QueryGameStateResponse,
 		SemanticGuess,
 		SubmitResponse,
-P_CONTRACT_MINTER_ADDR,
+		P_CONTRACT_MINTER_ADDR,
+SI_CONTRACT_MINTER_CODE_HASH,
 	} from '#/network/contract';
 
 	import {
@@ -879,8 +880,8 @@ P_CONTRACT_MINTER_ADDR,
 			game_hash: SI_CONTRACT_GAME_CODE_HASH,
 			rest: P_LCD_REST,
 			rpc: P_LCD_RPC,
-			minter_addr: '',
-			minter_hash: '',
+			minter_addr: P_CONTRACT_MINTER_ADDR,
+			minter_hash: SI_CONTRACT_MINTER_CODE_HASH,
 		});
 
 		// ref last seen value
@@ -918,7 +919,7 @@ P_CONTRACT_MINTER_ADDR,
 		await connect_wallet();
 
 		// instantiate game contract
-		k_game = new GameContract(k_wallet, P_CONTRACT_ADDR, g_permit);
+		k_game = new GameContract(k_wallet, P_CONTRACT_GAME_ADDR, g_permit);
 
 		// a game was started
 		if(h_cookie.game) {

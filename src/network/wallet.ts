@@ -25,6 +25,8 @@ export const P_LCD_REST = import.meta.env.VITE_NETWORK_LCD_REST;
 export const P_LCD_RPC = import.meta.env.VITE_NETWORK_LCD_RPC;
 
 
+export const uscrt_to_scrt = (xg_usrt: bigint) => (Number(xg_usrt / 10000n) / 100).toFixed(2).replace(/\.0+$/, '')+' SCRT';
+
 /**
  * wallet error
  */

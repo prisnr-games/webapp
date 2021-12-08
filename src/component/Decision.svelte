@@ -186,10 +186,10 @@
 		background-color: fade(black, 70%);
 		width: 800px;
 		position: fixed;
-		bottom: 80px;
+		bottom: 50px;
 		left: calc(50% - 400px);
 		box-sizing: border-box;
-		padding: 20px 0 20px 20px;
+		padding: 10px 0 0px 20px;
 		border: 1px solid fade(white, 20%);
 
 		&:after {
@@ -208,6 +208,7 @@
 
 		.decision-opts {
 			.decision-abstain {
+				text-align: center;
 				border-bottom: 1px solid fade(white, 20%);
 				position: relative;
 				z-index: 2;

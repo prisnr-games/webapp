@@ -1,6 +1,7 @@
 <script context="module" lang="ts">
 	export interface SceneHelper {
 		animate_chip_entry(si_color: CanonicalColor, si_shape: CanonicalShape): Promise<void>;
+		animate_chip_exit(): Promise<void>;
 	}
 </script>
 
@@ -106,6 +107,7 @@
 		// set scene helper
 		k_scene = {
 			animate_chip_entry,
+			animate_chip_exit,
 		};
 
 		h_textures = await load_textures({
@@ -198,6 +200,10 @@
 		const xl_width = window.innerWidth;
 		const xl_height = Math.max(400, Math.min(800, window.innerHeight - g_rect.bottom));
 		y_renderer.setSize(xl_width, xl_height);
+
+		// wtf is this about?
+		if(!dm_container) return;
+
 		dm_container.appendChild(y_renderer.domElement);
 
 		const xr_aspect = xl_width / xl_height;
@@ -287,7 +293,7 @@
 			y_scene.add(ym_chip);
 		}
 
-		async function animate_chip_entry(si_color: CanonicalColor, si_shape: CanonicalShape) {
+		async function animate_chip_entry(si_color: CanonicalColor, si_shape: CanonicalShape): Promise<void> {
 			create_chip(si_color, si_shape);
 			
 			// put it way out there
@@ -327,6 +333,43 @@
 			y_tween_rot.start();
 
 		};
+
+		async function animate_chip_exit(): Promise<void> {
+			const y_tween_pos = new Tween(new Vector3(0, 0, 0))
+				.to(new Vector3(-780, -2450, -3000), 4000)
+				.easing(Easing.Cubic.Out)
+				.onUpdate((yv_pos) => {
+					// ym_chip.position.copy(yv_pos);
+					ym_chip.position.setX(yv_pos.x);
+					ym_chip.position.setZ(yv_pos.z);
+				});
+			
+			y_tween_pos.start();
+
+
+			const y_tween_y = new Tween({y: 0})
+				.to({y: 750}, 4000)
+				.easing(Easing.Back.Out)
+				.onUpdate(({y:x_y}) => {
+					ym_chip.position.setY(x_y);
+				});
+			
+			y_tween_y.start();
+
+			const y_tween_rot = new Tween(new Euler(0, X_PI / 2, (X_PI / 2) - (X_PI / 6)))
+				.to(new Euler(0, 0, 0), 4000)
+				.easing(Easing.Cubic.Out)
+				.onUpdate((yv_rot) => {
+					ym_chip.rotation.set(yv_rot.x, yv_rot.y, yv_rot.z);
+				});
+			
+			y_tween_rot.start();
+
+			await timeout(4e3);
+
+			// hide chip
+			ym_chip.visible = true;
+		}
 	});
 </script>
 

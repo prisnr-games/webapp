@@ -130,11 +130,12 @@
 		GuessResponse,
 		JoinResponse,
 		PickRewardResponse,
-		P_CONTRACT_ADDR,
+		P_CONTRACT_GAME_ADDR,
+		SI_CONTRACT_GAME_CODE_HASH,
 		QueryGameStateResponse,
 		SemanticGuess,
-		SI_CONTRACT_CODE_HASH,
 		SubmitResponse,
+P_CONTRACT_MINTER_ADDR,
 	} from '#/network/contract';
 
 	import {
@@ -579,8 +580,8 @@
 		let b_restored_permit = false;
 
 		// permit exists for this contract
-		if(h_permits && h_permits[P_CONTRACT_ADDR]) {
-			g_permit = h_permits[P_CONTRACT_ADDR];
+		if(h_permits && h_permits[P_CONTRACT_GAME_ADDR]) {
+			g_permit = h_permits[P_CONTRACT_GAME_ADDR];
 
 			// restored permit
 			b_restored_permit = true;
@@ -605,7 +606,10 @@
 				g_permit = {
 					params: {
 						chain_id: k_wallet.chain,
-						allowed_tokens: [P_CONTRACT_ADDR],
+						allowed_tokens: [
+							P_CONTRACT_GAME_ADDR,
+							P_CONTRACT_MINTER_ADDR,
+						],
 						permit_name: SI_PERMIT,
 						permissions: ['owner'],
 					} as PermitParams,
@@ -615,7 +619,8 @@
 				// append
 				k_ls.set('permits', {
 					...(h_permits || {}),
-					[P_CONTRACT_ADDR]: g_permit,
+					[P_CONTRACT_GAME_ADDR]: g_permit,
+					[P_CONTRACT_MINTER_ADDR]: g_permit,
 				});
 			}
 			catch(e_sign_set: any) {
@@ -866,6 +871,18 @@
 	let dm_surprise: HTMLElement;
 
 	onMount(async() => {
+		// debugging info
+		console.log({
+			chain_name: S_CHAIN_NAME,
+			chain_id: SI_CHAIN,
+			game_addr: P_CONTRACT_GAME_ADDR,
+			game_hash: SI_CONTRACT_GAME_CODE_HASH,
+			rest: P_LCD_REST,
+			rpc: P_LCD_RPC,
+			minter_addr: '',
+			minter_hash: '',
+		});
+
 		// ref last seen value
 		const s_last_seen = h_cookie.last_seen;
 		const xt_last_seen = +s_last_seen;

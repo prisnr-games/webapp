@@ -27,7 +27,7 @@ import {
 
 
 import {
-	P_CONTRACT_ADDR,
+	P_CONTRACT_GAME_ADDR,
 } from "./contract";
 
 import {
@@ -249,7 +249,7 @@ export class KeplrWallet implements Wallet {
 						type: 'query_permit',
 						value: {
 							permit_name: SI_PERMIT,
-							allowed_tokens: [P_CONTRACT_ADDR],
+							allowed_tokens: [P_CONTRACT_GAME_ADDR],
 							permissions: ['owner'],
 						},
 					},

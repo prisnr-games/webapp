@@ -60,6 +60,7 @@
 		P_LCD_RPC,
 		Wallet,
 		WalletError,
+uscrt_to_scrt,
 	} from '#/network/wallet';
 	
 	import {
@@ -445,10 +446,10 @@ SI_CONTRACT_MINTER_CODE_HASH,
 					label: 'Install Keplr',
 					alt: `Keplr was not detected. Please install it first in order to use this option`,
 				},
-				local: {
-					label: 'Use Local Storage',
-					alt: `Creates a wallet in your browser's local storage for a better user experience on testnet`,
-				},
+				// local: {
+				// 	label: 'Use Local Storage',
+				// 	alt: `Creates a wallet in your browser's local storage for a better user experience on testnet`,
+				// },
 			});
 
 			// connect to wallet
@@ -786,7 +787,7 @@ SI_CONTRACT_MINTER_CODE_HASH,
 
 
 	interface CountdownConfig {
-		eta: () => number;
+		eta: EtaEstimator;
 		kill_text?: string;
 	}
 
@@ -801,17 +802,73 @@ SI_CONTRACT_MINTER_CODE_HASH,
 		protected _dm_clock: HTMLElement;
 		protected _i_interval: number;
 		protected _s_kill: string;
+		protected _k_eta: EtaEstimator;
+		protected _s_expired = 'run out of time';
 
 		constructor(gc_countdown: CountdownConfig) {
 			this._s_kill = gc_countdown.kill_text || '';
 
-			this._yw_time = writable('10m 00s remaining');
+			this._k_eta = gc_countdown.eta;
+
+			this._yw_time = writable('(estimating...)');
+
+			// kickoff estimation
+			void this._k_eta.eta;
 
 			this._i_interval = k_killables.addInterval(() => {
-				const xtl_diff = gc_countdown.eta() - Date.now();
+				const k_eta = this._k_eta;
+
+				// eta not ready; stop
+				if(!k_eta.ready) return;
+
+				// countdown expired
+				if(k_eta.expired) {
+					// update store
+					this._yw_time.set(this._s_expired);
+
+					// clear interval
+					this._i_interval = 0;
+					k_killables.delInterval(this._i_interval);
+
+					// remove clock
+					try {
+						this._dm_clock.remove();
+					}
+					catch(e_remove: unknown) {}
+
+					// stop
+					return;
+				}
+
+				const xtl_diff = k_eta.remaining;
 				const n_secs = Math.max(0, Math.floor(xtl_diff / XTL_SECONDS));
 				const n_mins = Math.floor(n_secs / 60);
-				this._yw_time.set(`${n_mins}m ${(''+(n_secs % 60)).padStart(2, '0')}s remaining`)
+
+				if(!n_mins) {
+					if(n_secs <= 10) {
+						this._yw_time.set('less than 10 seconds remaining');
+					}
+					else if(n_secs <= 31) {
+						this._yw_time.set('less than 30 seconds remaining');
+					}
+					else {
+						this._yw_time.set('less than 60 seconds remaining');
+					}
+				}
+				else if(n_mins < 2) {
+					this._yw_time.set('less than 2 minutes remaining');
+				}
+				else if(n_mins < 5) {
+					this._yw_time.set('less than 5 minutes remaining');
+				}
+				else if(n_mins < 10) {
+					this._yw_time.set('less than 10 minutes remaining');
+				}
+				else {
+					this._yw_time.set('a little more than 10 minutes remaining');
+				}
+
+				// this._yw_time.set(`${n_mins}m ${(''+(n_secs % 60)).padStart(2, '0')}s remaining`)
 			}, 100);
 
 			// render clock icon
@@ -865,6 +922,65 @@ SI_CONTRACT_MINTER_CODE_HASH,
 
 		// exit
 		return fatal('Game over. Reload to play again.')
+	}
+
+	async function try_resume_game(): Promise<boolean> {
+		let b_waiting = true;
+		k_panel.reveal_text('checking for active game...').then(() => b_waiting && k_panel.spinning(true));
+
+		// check for active game
+		let g_game!: GameStateResponse | undefined;
+		try {
+			try {
+				g_game = await k_game.queryGameState();
+			}
+			finally {
+				// no longer waiting
+				b_waiting = false;
+
+				// clear text and stop spinning
+				k_panel.reveal_text('');
+			}
+		}
+		catch(e_query) {
+			debugger;
+		}
+
+		// continue game
+		if(g_game) {
+			console.log('Resuming:', g_game);
+
+			// round exists
+			if(null !== g_game.round) {
+				if(g_game.finished) {
+					k_panel.warn(`Fast-forwarding through finished game so you can see the results.`);
+				}
+				else {
+					k_panel.warn(`Successfully resumed active game.`);
+				}
+
+				if(0 === g_game.round) {
+					g_game = await wait_for_other_player(true);
+				}
+
+				// start/resume round 1
+				if(1 === g_game.round) {
+					// start at round 1a, it will skip to appropriate sub-round
+					void round_1a(g_game, true);
+					return true;
+				}
+
+				// resume round 3
+				if(3 === g_game.round) {
+					void round_3a(g_game, true);
+					return true;
+				}
+
+				await k_panel.error(`Unrecognized game state round: ${g_game.round}`);
+			}
+		}
+
+		return false;
 	}
 
 
@@ -923,55 +1039,9 @@ SI_CONTRACT_MINTER_CODE_HASH,
 
 		// a game was started
 		if(h_cookie.game) {
-			let b_waiting = true;
-			k_panel.reveal_text('checking for active game...').then(() => b_waiting && k_panel.spinning(true));
-
-			// check for active game
-			let g_game_contd!: GameStateResponse | undefined;
-			try {
-				try {
-					g_game_contd = await k_game.queryGameState();
-				}
-				finally {
-					// no longer waiting
-					b_waiting = false;
-
-					// clear text and stop spinning
-					k_panel.reveal_text('');
-				}
-			}
-			catch(e_query) {
-				debugger;
-			}
-
-			// continue game
-			if(g_game_contd) {
-				console.log('Resuming:', g_game_contd);
-
-				// round exists
-				if(null !== g_game_contd.round) {
-					k_panel.warn(`Successfully resumed active game.`);
-
-					let g_game: GameStateResponse = g_game_contd;
-
-					if(0 === g_game_contd.round) {
-						g_game = await wait_for_other_player(true);
-					}
-
-					// start/resume round 1
-					if(1 === g_game.round) {
-						// start at round 1a, it will skip to appropriate sub-round
-						return round_1a(g_game, true);
-					}
-
-					// resume round 3
-					if(3 === g_game.round) {
-						return round_3a(g_game, true);
-					}
-
-					await k_panel.error(`Unrecognized game state round: ${g_game.round}`);
-				}
-			}
+			const b_exit = await try_resume_game();
+			
+			if(b_exit) return;
 
 			// no active game
 			delete_cookie('game');
@@ -1007,22 +1077,43 @@ SI_CONTRACT_MINTER_CODE_HASH,
 		return try_join();
 	});
 
-	async function try_join(): Promise<void> {
-		// ask if ready to join
-		await k_panel.reveal_text('ready to play?');
+	interface ExecStruct {
+		reveal?: string | null;
+		exec: () => Promise<GameStateResponse>;
+		query_fail?: (e_fail?: unknown) => Promise<GameStateResponse | null> | null;
+		check: (g_game: GameStateResponse) => boolean;
+		rejected?: (e_fail?: unknown) => Promise<GameStateResponse | null> | null;
+		condition?: (e_fail?: unknown) => Promise<GameStateResponse | null> | null;
+	}
 
-		// join a game
-		await k_prompt.ok('Join a game');
+	class GameStateError extends Error {}
 
+	async function safe_exec(gc_exec: ExecStruct): Promise<GameStateResponse | null> {
 		// wait for transaction is verified
 		let b_waiting = true;
-		k_panel.reveal_text('waiting for transaction to be verified... ').then(() => b_waiting && k_panel.spinning(true));
+		const s_reveal = gc_exec.reveal;
+		if('string' === typeof s_reveal) {
+			k_panel.reveal_text(s_reveal).then(() => b_waiting && k_panel.spinning(true));
+		}
+		else {
+			k_panel.spinning(true);
+		}
 
-		// attempt to join
-		let g_join!: ContractExecInfo<JoinResponse>;
+		const f_check = gc_exec.check;
+		const f_condition = gc_exec.condition || gc_exec.query_fail;
+		const f_rejected = gc_exec.rejected || gc_exec.query_fail;
+		
+		let g_game: GameStateResponse;
+
+		// attempt executioon
 		try {
 			try {
-				g_join = await k_game.joinGame();
+				g_game = await gc_exec.exec();
+				
+				if(!f_check(g_game)) {
+					g_game = null;
+					throw new GameStateError();
+				}
 			}
 			finally {
 				// no longer waiting
@@ -1033,64 +1124,92 @@ SI_CONTRACT_MINTER_CODE_HASH,
 			}
 		}
 		// failed
-		catch(e_join: unknown) {
-			console.error(e_join);
+		catch(e_exec: unknown) {
+			console.error(e_exec);
 
 			// error
-			if(e_join instanceof Error) {
-				const se_join = e_join.message;
+			if(e_exec instanceof Error) {
+				const se_exec = e_exec.message;
 
 				// no scrt
-				if(/Account does not exist/.test(se_join)) {
+				if(/Account does not exist/.test(se_exec)) {
 					return fatal(`Looks like your wallet is empty. Make sure to acquire some SCRT tokens so that you can pay the gas fees for transactions.`);
 				}
 				// already in active game
-				else if(/must finish current game/.test(se_join)) {
+				else if(/must finish current game/.test(se_exec)) {
 					write_cookie({
 						game: 'started',
 					}, 12*XTL_HOURS);
 
+					// retry
+					if(await try_resume_game()) return null;
+
+					// fail
 					return fatal(`Looks like you changed browsers or cleared cache since you last joined a game with this account. Please reload and the game will attempt to resume.`);
 				}
 				// contract not found
-				else if(/contract not found/i.test(se_join)) {
+				else if(/contract not found/i.test(se_exec)) {
 					return fatal(`Contract not found! Are you on the right network?`);
 				}
+				// contract condition exception
+				else if(/execute contract failed/.test(se_exec)) {
+					k_panel.error(`Contract error: ${se_exec}`);
+					void f_condition!(e_exec);
+					return null;
+				}
+				// user rejected request
+				else if(/Request rejected/.test(se_exec)) {
+					k_panel.error(`Transaction rejected`);
+					void f_rejected!(e_exec);
+					return null;
+				}
 				// timeout
-				else if(/timed out/.test(se_join)) {
+				else if(/timed out/.test(se_exec)) {
 					const yw_retries = writable('');
 
 					await k_panel.warn(`There was a timeout error while waiting for the transaction to be included. Waiting to see if it gets included... {retries}`, {
 						retries: yw_retries,
 					});
 
-					const b_exit = await (async function retry(n_retries=1): Promise<boolean> {
+					const g_game_retry = await (async function retry(n_retries=1): Promise<GameStateResponse | null> {
 						await timeout(5000);
 
+						let g_query: GameStateResponse | null;
 						try {
-							g_join = {
-								data: {
-									join: {
-										status: 'simulated',
-										game_state: await k_game.queryGameState(),
-									},
-								},
-							} as ContractExecInfo<JoinResponse>;
+							g_query = await k_game.queryGameState();
+
+							if(!f_check(g_query)) {
+								console.warn(`query permit check failed on game state`, g_query);
+								g_query = null;
+							}
 						}
 						catch(e_query: unknown) {
-							await k_panel.error([`Timeout error. Please try again with higher gas fee.`, se_join]);
+							if(!(e_query instanceof GameStateError)) {
+								await k_panel.error([`Timeout error. Please try again with higher gas fee.`, se_exec]);
 
-							// tx failed; allow user to retry
-							void try_join();
-							return true;
+								// tx failed; allow user to retry
+								if(gc_exec.query_fail) {
+									return await gc_exec.query_fail(e_query);
+								}
+
+								// fail
+								return null;
+							}
 						}
 
 						// retry
-						const z_state = g_join?.data?.join?.game_state;
-						if(!z_state || null === z_state.round) {
+						if(!g_query!) {
 							// give up
-							if(n_retries >= 8) {
-								return fatal(`Reached maximum retries. Seems like your transaction failed Try reloading the page.`);
+							if(n_retries >= 5) {
+								await k_panel.error(`Reached maximum retries. Seems like your transaction failed. Try again with higher gas fee?`);
+
+								// tx failed; allow user to retry
+								if(gc_exec.query_fail) {
+									return await gc_exec.query_fail(new GameStateError());
+								}
+
+								// fail
+								return fatal('Unhandled query failure path.');
 							}
 							
 							// info and retry
@@ -1099,43 +1218,76 @@ SI_CONTRACT_MINTER_CODE_HASH,
 						}
 
 						// worked!
-						return false;
+						return g_query;
 					})();
 
-					if(b_exit) return;
+					// fail
+					if(!g_game_retry) {
+						return null;
+					}
+					// success
+					else {
+						g_game = g_game_retry;
+					}
 				}
 				// unhandled
 				else {
 					debugger;
-					return fatal(`Unhandled error: ${e_join.stack}`);
+					return fatal(`Unhandled error: ${e_exec.stack}`);
 				}
 			}
 			// unknown
 			else {
-				return fatal(`Unknown error: ${e_join}`);
+				return fatal(`Unknown error: ${e_exec}`);
 			}
 		}
 
-		console.log(g_join);
+		console.log(g_game);
 
 		// clear prompt
 		k_panel.reveal_text('');
 
+		// // destructure join results
+		// const {
+		// 	join: g_res_join,
+		// 	error: se_join,
+		// } = g_exec.data;
 
-		// destructure join results
-		const {
-			join: g_res_join,
-			error: se_join,
-		} = g_join.data;
+		// // error
+		// if(se_join) {
+		// 	return fatal(se_join);
+		// }
 
-		// error
-		if(se_join) {
-			return fatal(se_join);
-		}
+		// // 
+		// const g_game_join = g_res_join?.game_state!;
 
-		// 
-		const g_game_join = g_res_join?.game_state!;
-		let g_game = g_game_join!;
+		return g_game;
+	}
+
+	async function try_join(): Promise<void> {
+		// ask if ready to join
+		await k_panel.reveal_text('ready to play?');
+
+		// join a game
+		await k_prompt.ok('Join a game');
+
+		const g_game_join = await safe_exec({
+			reveal: 'waiting for transaction to be verified... ',
+			async exec(): Promise<GameStateResponse> {
+				return (await k_game.joinGame()).data.join!.game_state!;
+			},
+			check(g: GameStateResponse): boolean {
+				return null !== g.round;
+			},
+			query_fail() {
+				void try_join();
+				return null;
+			},
+		});
+
+		if(!g_game_join) return;
+
+		let g_game = g_game_join;
 
 		// must wait for another player
 		if(0 === g_game_join.round) {
@@ -1222,11 +1374,14 @@ SI_CONTRACT_MINTER_CODE_HASH,
 
 		si_assert_quality = g_evt.detail;
 
-		const [, si_quality_first] = si_submit_first.split('|');
-		if(si_quality_first === si_assert_quality) {
-			si_assert_quality = '';
+		// 2nd assertion
+		if(si_submit_first) {
+			const [, si_quality_first] = si_submit_first.split('|');
+			if(si_quality_first === si_assert_quality) {
+				si_assert_quality = '';
 
-			await k_panel.arbiter(`You cannot submit a message that would contradict your previous assertion.`);
+				await k_panel.arbiter(`You cannot submit a message that would contradict your previous assertion.`);
+			}
 		}
 
 		const [si_attr, s_value] = si_assert_quality.split(':');
@@ -1267,57 +1422,23 @@ SI_CONTRACT_MINTER_CODE_HASH,
 			// lock submit button
 			k_panel.submittable(null);
 
-			// start spinning
-			k_panel.spinning(true);
+			const g_game = await safe_exec({
+				async exec(): Promise<GameStateResponse> {
+					return (await k_game.submitAssertion(si_assert_basis, si_assert_quality as SemanticQuality)).data.submit!.game_state!;
+				},
+				check(g: GameStateResponse): boolean {
+					return si_submit_first? null !== g.second_submit: null !== g.first_submit;
+				},
+				query_fail() {
+					// reset tx
+					reset_tx();
 
-			// submit assertion
-			let g_response: ContractExecInfo<SubmitResponse>;
-			try {
-				try {
-					g_response = await k_game.submitAssertion(si_assert_basis, si_assert_quality as SemanticQuality);
-				}
-				finally {
-					// stop spinning
-					k_panel.spinning(false);
-				}
-			}
-			catch(e_submit: unknown) {
-				// clear console
-				void k_panel.reveal_text('');
+					void select_quality(g_evt);
+					return null;
+				},
+			});
 
-				if(e_submit instanceof Error) {
-					const se_submit = e_submit.message;
-					
-					if(/execute contract failed/.test(se_submit)) {
-						k_panel.error(`Contract error: ${se_submit}`);
-					}
-					else if(/Request rejected/.test(se_submit)) {
-						k_panel.error(`Transaction rejected`);
-					}
-					else {
-						k_panel.error(`Unhandled error: ${e_submit.stack}`);
-					}
-				}
-				else {
-					k_panel.error(`Unknown error: ${e_submit}`);
-				}
-				
-				// reset
-				return reset_tx();
-			}
-
-			// destructure responose
-			const {
-				data: g_data,
-			} = g_response;
-
-			// contract error
-			if(g_data.error) {
-				k_panel.error(`Contract error: ${g_data.error}`);
-				
-				// reset
-				return reset_tx();
-			}
+			if(!g_game) return;
 
 			// commit text to message history
 			await k_panel.commit();
@@ -1328,9 +1449,6 @@ SI_CONTRACT_MINTER_CODE_HASH,
 
 			// remove submission button
 			k_panel.unsubmittable();
-
-			// proceed to next state
-			const g_game = g_data.submit?.game_state!
 
 			// player just submitted 2nd assertion
 			if(g_game.second_submit) {
@@ -1386,9 +1504,8 @@ SI_CONTRACT_MINTER_CODE_HASH,
 
 		// countdown timer
 		{
-			const k_eta = new EtaEstimator(g_game.first_round_start_block+'');
 			k_countdown_1a = new Countdown({
-				eta: () => k_eta.eta,
+				eta: new EtaEstimator(g_game.first_round_start_block+''),
 				kill_text: 'successfully submitted',
 			});
 
@@ -1434,9 +1551,8 @@ SI_CONTRACT_MINTER_CODE_HASH,
 				if(k_countdown_1a) k_countdown_1a.kill('already submittted');
 
 				// opponent's time remaining
-				const k_eta = new EtaEstimator(g_game.first_round_start_block+'')
 				k_countdown_1a2 = new Countdown({
-					eta: () => k_eta.eta,
+					eta: new EtaEstimator(g_game.first_round_start_block+''),
 					kill_text: 'also submitted theirs',
 				});
 
@@ -1569,9 +1685,8 @@ SI_CONTRACT_MINTER_CODE_HASH,
 			await timeout(4.1e3);
 		}
 
-		const k_eta = new EtaEstimator(g_game.second_submit_turn_start_block+'');
 		k_countdown_1b = new Countdown({
-			eta: () => k_eta.eta,
+			eta: new EtaEstimator(g_game.second_submit_turn_start_block+''),
 			kill_text: 'already submitted',
 		});
 
@@ -1614,9 +1729,8 @@ SI_CONTRACT_MINTER_CODE_HASH,
 				if(k_countdown_1b2) k_countdown_1b2.kill();
 				
 				// opponent's time remaining
-				const k_eta = new EtaEstimator(g_game.second_submit_turn_start_block+'')
 				k_countdown_1c = new Countdown({
-					eta: () => k_eta.eta,
+					eta: new EtaEstimator(g_game.second_submit_turn_start_block+''),
 					kill_text: 'also submitted theirs',
 				});
 
@@ -1735,9 +1849,8 @@ SI_CONTRACT_MINTER_CODE_HASH,
 			}
 		}
 
-		const k_eta = new EtaEstimator(g_game.guess_turn_start_block+'');
 		k_countdown_1c2 = new Countdown({
-			eta: () => k_eta.eta,
+			eta: new EtaEstimator(g_game.guess_turn_start_block+''),
 			kill_text: 'successfully submitted',
 		});
 
@@ -1769,40 +1882,31 @@ SI_CONTRACT_MINTER_CODE_HASH,
 			// lock submit button
 			k_panel.submittable(null);
 
-			// start spinning
-			k_panel.spinning(true);
+			// hide decision ui
+			k_decision.hide();
 
-			let g_guess: GuessResponse;
-			try {
-				try {
-					g_guess = (await k_game.submitGuess(g_opt)).data;
-				}
-				finally {
-					void k_panel.reveal_text('');
-				}
+			const g_game = await safe_exec({
+				async exec(): Promise<GameStateResponse> {
+					const g_guess = (await k_game.submitGuess(g_opt)).data.guess!.game_state!
+					
+					void k_panel.commit();
 
-				void k_panel.commit();
-			}
-			catch(e_submit: unknown) {
-				if(e_submit instanceof Error) {
-					await k_panel.error(`Unhandled error: ${e_submit.stack}`);
-				}
-				else {
-					await k_panel.error(`Unknown error: ${e_submit}`);
-				}
+					return g_guess;
+				},
+				check(g: GameStateResponse): boolean {
+					return null !== g.guess;
+				},
+				query_fail() {
+					k_decision.show();
+					void prepare_guess(g_opt);
+					return null;
+				},
+			});
 
-				return;
-			}
-
-			if(g_guess.error) {
-				await k_panel.error(`Contract error: ${g_guess.error}`);
-				return;
-			}
+			if(!g_game) return;
 
 			// stop countdown for guess submissioin
 			k_countdown_1c2.kill();
-
-			const g_game = g_guess.guess!.game_state!;
 
 			// proceed to final stage
 			void round_1d(g_game);
@@ -1821,6 +1925,7 @@ SI_CONTRACT_MINTER_CODE_HASH,
 		} = g_game;
 
 		let b_wrong = false;
+		
 
 		// notify user about the correctness of their guess
 		if(si_round && !b_notif_1d_result) {
@@ -1843,13 +1948,12 @@ SI_CONTRACT_MINTER_CODE_HASH,
 		}
 
 		// still waiting on other player
-		if(1 === i_round) {
+		if(!g_game.opponent_guess) {
 			if(!b_notif_1d_waiting) {
 				b_notif_1d_waiting = true;
 
-				const k_eta = new EtaEstimator(g_game.guess_turn_start_block+'');
 				k_countdown_1d = new Countdown({
-					eta: () => k_eta.eta,
+					eta: new EtaEstimator(g_game.guess_turn_start_block+''),
 					kill_text: 'now submitted',
 				});
 
@@ -1869,65 +1973,89 @@ SI_CONTRACT_MINTER_CODE_HASH,
 		// kill countdowns
 		if(k_countdown_1d) k_countdown_1d.kill();
 
+		// remove chip ui
+		si_player_hint = '' as SemanticQuality;
+		void k_scene.animate_chip_exit();
+
 		// debug
 		console.log('round_1d#over', g_game);
 
 		// game is over
-		if(si_outcome) {
-			// summarize opponent's action
-			const {
-				opponent_round_result: si_opp_round,
-				opponent_guess: si_opp_guess,
-			} = g_game;
+		if(g_game.finished) {
+			// opponent guess
+			if(g_game.opponent_round_result) {
+				// summarize opponent's action
+				const {
+					opponent_round_result: si_opp_round,
+					opponent_guess: si_opp_guess,
+				} = g_game;
 
-			const [si_opp_guess_target, si_opp_guess_color, si_opp_guess_shape] = si_opp_guess!.split(/\|/g);
-			const [, si_opp_correctness] = si_opp_round!.split('|');
+				const [si_opp_guess_target, si_opp_guess_color, si_opp_guess_shape] = si_opp_guess!.split(/\|/g);
+				const [, si_opp_correctness] = si_opp_round!.split('|');
 
-			let s_opp_summary = '';
-			let b_opp_wrong = false;
-			if('abstain' === si_opp_guess_target) {
-				s_opp_summary = 'abstained from guessing';
+				let s_opp_summary = '';
+				let b_opp_wrong = false;
+				if('abstain' === si_opp_guess_target) {
+					s_opp_summary = 'abstained from guessing';
+				}
+				else {
+					const si_color = si_opp_guess_color.split(':')[1] as CanonicalColor;
+					const si_shape = si_opp_guess_shape.split(':')[1] as CanonicalShape;
+
+					const s_guess = H_COLORS[si_color].labels[s_lang]+' '+H_SHAPES[si_shape].labels[s_lang];
+					
+					b_opp_wrong = 'correct' !== si_opp_correctness;
+
+					s_opp_summary = `${b_opp_wrong? 'wrongly': 'correctly'} guessed that ${'bag' === si_opp_guess_target? 'my bag': 'your chip'} is the ${s_guess}`;
+				}
+
+				if('you lost wager' === si_outcome) {
+					const s_opponent_prelude = b_opp_wrong
+						? `But you'll be happy to know that your opponent`
+						: 'Your opponent';
+
+					await k_panel.arbiter([
+						`${b_wrong? 'As you already know': 'Bad news'}, you lost your wager. ${s_opponent_prelude} ${s_opp_summary}, so they ${b_opp_wrong? 'also lost their wager': 'won the game and gained your lost wager'}.`,
+					]);
+
+					await timeout(9e3);
+
+					return game_over();
+				}
+				else if('you won wager' === si_outcome) {
+					const xg_wager = BigInt(g_game.wager!);
+					const s_wager = uscrt_to_scrt(xg_wager);
+					const s_total = uscrt_to_scrt(xg_wager * 2n);
+
+					await k_panel.arbiter(`
+						Congratulations, you won! Your opponent ${s_opp_summary}, so they lost their wager.
+						
+						I have refunded you your original ${s_wager} plus an extra ${s_wager} from your opponent's wager for a total of ${s_total}.
+					`);
+
+					await timeout(9e3);
+
+					return game_over();
+				}
+				else {
+					await k_panel.arbiter([
+						`Well done. You and your opponent have tied, so you both can claim a reward. They ${s_opp_summary}.`,
+					]);
+
+					if(!b_resumed) await timeout(4e3);
+				}
 			}
+			// early exit
 			else {
-				const s_guess = H_COLORS[si_opp_guess_color as CanonicalColor].labels[s_lang]+' '+H_SHAPES[si_opp_guess_shape as CanonicalShape].labels[s_lang];
-				
-				b_opp_wrong = 'correct' !== si_opp_correctness;
-
-				s_opp_summary = `${b_opp_wrong? 'wrongly': 'correctly'} guessed that ${'bag' === si_opp_guess_target? 'my bag': 'your chip'} is the ${s_guess}`;
+				return fatal(`Somebody terminated the game.`);
 			}
-
-			if('you lost wager' === si_outcome) {
-				const s_opponent_prelude = b_opp_wrong
-					? `But you'll be happy to know that your opponent`
-					: 'Your opponent';
-
-				await k_panel.arbiter([
-					`${b_wrong? 'As you already know': 'Bad news'}, you lost your wager. ${s_opponent_prelude} ${s_opp_summary}, so they ${b_opp_wrong? 'also lost their wager': 'won and gained your lost wager'}.`,
-				]);
-
-				await timeout(9e3);
-
-				return game_over();
-			}
-			else if('you won wager' === si_outcome) {
-				await k_panel.arbiter([
-					`Congratulations, you won! Your opponent ${s_opp_summary}, so they lost their wager and you earned SCRT.`,
-				]);
-
-				await timeout(9e3);
-
-				return game_over();
-			}
-			else {
-				await k_panel.arbiter([
-					`Well done. You and your opponent have tied, so you both can claim a reward. They ${s_opp_summary}.`,
-				]);
-
-				if(!b_resumed) await timeout(4e3);
-			}
-
+		}
+		else {
 			if(3 === g_game.round) {
 				void round_3a(g_game, b_resumed);
+			}
+			else {
+				return fatal(`Game is not finished but round is ${g_game.round}.`);
 			}
 		}
 	}
@@ -1937,9 +2065,8 @@ SI_CONTRACT_MINTER_CODE_HASH,
 	let k_countdown_3a: Countdown;
 
 	async function round_3a(g_game: GameStateResponse, b_resumed=false): Promise<void> {
-		const k_eta = new EtaEstimator(g_game.pick_reward_round_start_block!+'');
 		k_countdown_3a = new Countdown({
-			eta: () => k_eta.eta,
+			eta: new EtaEstimator(g_game.pick_reward_round_start_block!+''),
 			kill_text: 'made your decision'
 		});
 
@@ -1963,33 +2090,36 @@ SI_CONTRACT_MINTER_CODE_HASH,
 		k_pick.show();
 	}
 
-	async function select_pick({detail:si_pick}: CustomEvent<PickOption>) {
+	async function select_pick(g_evt: CustomEvent<PickOption>) {
+		const {detail:si_pick} = g_evt;
+
 		k_panel.submittable(null);
 
 		await k_panel.reveal_text(`i pick the ${si_pick}`);
 
 		k_panel.submittable(async() => {
-			// start spinning
-			k_panel.spinning(true);
+			// hide pick ui
+			k_pick.hide();
 
-			let g_pick: PickRewardResponse;
+			const g_game = await safe_exec({
+				async exec(): Promise<GameStateResponse> {
+					const g_guess = (await k_game.pickReward(si_pick)).data.pick_reward!.game_state!
+					
+					void k_panel.commit();
 
-			try {
-				try {
-					g_pick = (await k_game.pickReward(si_pick)).data;
-				}
-				finally {
-					// clear text and stop spinning
-					void k_panel.reveal_text('');
-				}
+					return g_guess;
+				},
+				check(g: GameStateResponse): boolean {
+					return null !== g.pick;
+				},
+				query_fail() {
+					k_pick.show();
+					void select_pick(g_evt);
+					return null;
+				},
+			});
 
-				void k_panel.commit();
-			}
-			catch(e_pick: unknown) {
-				return fatal(e_pick+'');
-			}
-
-			const g_game = g_pick.pick_reward!.game_state!;
+			if(!g_game) return;
 
 			round_3b(g_game);
 		});
@@ -2013,9 +2143,8 @@ SI_CONTRACT_MINTER_CODE_HASH,
 				b_notif_3b_waiting = true;
 				
 				// opponent's time remaining
-				const k_eta = new EtaEstimator(g_game.pick_reward_round_start_block+'')
 				k_countdown_3b = new Countdown({
-					eta: () => k_eta.eta,
+					eta: new EtaEstimator(g_game.pick_reward_round_start_block+''),
 					kill_text: 'also picked theirs',
 				});
 
@@ -2039,7 +2168,7 @@ SI_CONTRACT_MINTER_CODE_HASH,
 			switch(si_outcome) {
 				case 'you won jackpot': {
 					await k_panel.arbiter(`
-						Fortune favors the bold! Your opponent picked the NFT, so you have successfully claimed the jackpot.
+						Fortune favors the bold! Your opponent picked the NFT, and you have successfully claimed the jackpot of ${uscrt_to_scrt(BigInt(g_game.jackpot_reward || '0'))}!
 					`);
 					break;
 				}
@@ -2248,7 +2377,7 @@ SI_CONTRACT_MINTER_CODE_HASH,
 	<Decision bind:k_decision {k_deduced} on:abstain={select_abstain} on:change={select_decision} />
 
 	{#if si_player_hint}
-		<div class="mine" transition:blur={{duration:2.4e3, easing:quadInOut, delay: 4.5e3}}>
+		<div class="mine" in:blur={{duration:2.4e3, easing:quadInOut, delay:4.5e3}} out:blur={{duration:2.4e3, easing:quadInOut}}>
 			<div class="chip">
 				The {proper(si_player_color)} {proper(si_player_shape)}
 			</div>

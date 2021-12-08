@@ -81,7 +81,7 @@
 		GameContext,
 	 } from './App.svelte';
 
-	import { dd, qsa } from '#/util/dom';
+	import { dd, qs, qsa } from '#/util/dom';
 
 	// game context
 	const {
@@ -156,8 +156,11 @@
 	let i_iter = 0;
 
 	let b_disabled = false;
+	let s_revealing = '';
 
 	async function reveal_text(s_reveal: string, xt_interval=60, xt_pause=0) {
+		s_revealing = s_reveal;
+
 		// set latest
 		let i_latest = ++i_iter;
 
@@ -193,14 +196,18 @@
 		// no longer latest; bail
 		if(i_iter !== i_latest) return;
 
+		const dm_cursor_use = dm_cursor || qs(document.body, '.cursor');
+
+		if(!dm_cursor_use) return;
+
 		for(let i_char=i_shared; i_char<nl_reveal; i_char++) {
-			dm_cursor.classList.remove('blinking');
+			dm_cursor_use.classList.remove('blinking');
 			await timeout(10);
 
 			// no longer latest; bail
 			if(i_iter !== i_latest) return;
 
-			dm_cursor.classList.add('blinking');
+			dm_cursor_use.classList.add('blinking');
 
 			s_text += s_reveal[i_char];
 
@@ -218,7 +225,9 @@
 	let i_spin = 0;
 	async function spinning(b_spin: boolean) {
 		if(b_spin) {
-			if(!i_spinning) {
+			if(0 === i_spinning) {
+				i_spinning = -1;
+
 				const s_restore = s_text;
 				await reveal_text(s_restore+' '+A_SPIN[A_SPIN.length-1]+' ');
 				s_text = s_restore;
@@ -232,7 +241,7 @@
 				i_spinning = k_killables.addInterval(spin, 100);
 			}
 		}
-		else if(i_spinning) {
+		else if(i_spinning > 0) {
 			s_spinner = '';
 			k_killables.delInterval(i_spinning);
 			i_spin = 0;
@@ -407,7 +416,7 @@
 		// 	`> You${s_account_alias}: ${s_text}`,
 		// ]));
 
-		user(s_text);
+		user(s_revealing || s_text);
 
 		s_text = '';
 	}

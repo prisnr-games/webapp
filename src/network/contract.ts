@@ -139,6 +139,8 @@ export interface GameStateResponse {
 	second_submit_block: number;
 
 	second_submit_turn_start_block: number;
+
+	jackpot_reward: string;
 }
 
 interface InnerResponse {
@@ -287,7 +289,7 @@ export class GameContract {
 	pickReward(si_pick: PickOption): Promise<ContractExecInfo<PickRewardResponse>> {
 		return this.execute<PickRewardResponse>({
 			pick_reward: {
-				reward: 'jackpot' === si_pick? 'pool': si_pick,
+				reward: si_pick,
 			},
 		} as PickRewardMsg, {
 			amount: [
@@ -296,7 +298,7 @@ export class GameContract {
 					denom: 'uscrt',
 				},
 			],
-			gas: '40000',
+			gas: '1000000',
 		});
 	}
 
@@ -467,16 +469,11 @@ export class GameContract {
 // 	}
 // }
 
-type FrequencyTuner = (k_eta: EtaEstimator) => boolean;
+type FrequencyTuner = (k_eta: EtaEstimator, xtl_remain: number) => boolean;
 
-const F_FREQ_DEFAULT: FrequencyTuner = (k_eta: EtaEstimator) => {
+const F_FREQ_DEFAULT: FrequencyTuner = (k_eta: EtaEstimator, xtl_remain: number) => {
 	// once less than a minute remains
-	if(k_eta.remaining < 60*XTL_SECONDS) {
-		// expired
-		if(k_eta.latestBlock >= k_eta.destinationBlock) {
-			return false;
-		}
-
+	if(xtl_remain < 60*XTL_SECONDS) {
 		// update every 5 seconds
 		return (Date.now() - k_eta.lastUpdated) > 5 * XTL_SECONDS;
 	}
@@ -579,8 +576,34 @@ interface StatusRpcResponse extends JsonObject {
 }
 
 const XTL_BLOCK_TIME_AVG = SI_CHAIN.startsWith('pulsar')? 1.98*XTL_SECONDS: 5.99*XTL_SECONDS
-const N_BLOCKS_PER_5_MIN = Math.floor((5*XTL_MINUTES) / XTL_BLOCK_TIME_AVG);
+const N_BLOCKS_PER_5_MIN = Math.floor((10*XTL_MINUTES) / XTL_BLOCK_TIME_AVG);
 console.log(`Imposing global ${N_BLOCKS_PER_5_MIN} blocks per 5 minutes estimate`);
+
+let b_currently_updating = false;
+let s_latest_height: string = '0';
+let s_latest_time: string = (new Date()).toISOString();
+let xt_last_update = 0;
+
+async function update_latest() {
+	if(Date.now() - xt_last_update < 5*XTL_SECONDS) {
+		return;
+	}
+
+	const du_endpoint = new URL(P_LCD_RPC);
+	du_endpoint.pathname = '/status';
+
+	try {
+		const g_res = await get_json<RpcResponse<StatusRpcResponse>>(du_endpoint.href);
+
+		({
+			latest_block_height: s_latest_height,
+			latest_block_time: s_latest_time,
+		} = g_res.data!.result.sync_info);
+
+		xt_last_update = Date.now();
+	}
+	catch(e_update) {}
+}
 
 export class EtaEstimator {
 	protected _xg_block_start: bigint;
@@ -590,11 +613,12 @@ export class EtaEstimator {
 	protected _xt_eta = 0;
 	protected _xg_latest = 0n;
 	protected _xt_updated = 0;
+	protected _b_currently_updating = false;
 
 	constructor(w_block_start: string | bigint, n_blocks_elapse=N_BLOCKS_PER_5_MIN, f_frequency=F_FREQ_DEFAULT) {
 		this._xg_block_start = BigInt(w_block_start);
 		this._xg_block_dest = this._xg_block_start + BigInt(n_blocks_elapse);
-		this._f_should_update = () => f_frequency(this);
+		this._f_should_update = () => f_frequency(this, this._xt_eta - Date.now());
 	}
 
 	protected async fetch_start_time(): Promise<void> {
@@ -611,19 +635,13 @@ export class EtaEstimator {
 	}
 
 	protected async estimate(): Promise<number> {
+		b_currently_updating = true;
+
 		if(!this._xt_start) {
 			await this.fetch_start_time();
 		}
 
-		const du_endpoint = new URL(P_LCD_RPC);
-		du_endpoint.pathname = '/status';
-
-		const g_res = await get_json<RpcResponse<StatusRpcResponse>>(du_endpoint.href);
-
-		const {
-			latest_block_height: s_latest_height,
-			latest_block_time: s_latest_time,
-		} = g_res.data!.result.sync_info;
+		update_latest();
 
 		const xg_latest = this._xg_latest =  BigInt(s_latest_height);
 		const xt_latest = (new Date(s_latest_time)).getTime();
@@ -633,6 +651,8 @@ export class EtaEstimator {
 		const n_blocks_remaining = Number(this._xg_block_dest - xg_latest);
 
 		const xt_now = this._xt_updated = Date.now();
+
+		b_currently_updating = false;
 
 		return this._xt_eta = xt_now + Math.round(n_blocks_remaining * xtl_per_block);
 	}
@@ -649,15 +669,23 @@ export class EtaEstimator {
 		return this._xg_block_dest;
 	}
 
+	get expired(): boolean {
+		return this.latestBlock >= this.destinationBlock;
+	}
+
+	get ready(): boolean {
+		return 0 !== this._xt_eta;
+	}
+
 	get eta(): number {
-		if(this._f_should_update()) {
+		if(!this.expired && !b_currently_updating && this._f_should_update()) {
 			void this.estimate();
 		}
 
-		return this._xt_eta || Date.now();
+		return this._xt_eta;
 	}
 
 	get remaining(): number {
-		return this._xt_eta - Date.now();
+		return this.eta - Date.now();
 	}
 }

@@ -276,11 +276,11 @@ export class KeplrWallet implements Wallet {
 			s_opts += ` --amount ${g_xfer.amount}${g_xfer.denom}`;
 		}
 		console.log(`secretd tx compute execute ${p_contract} '${JSON.stringify(g_msg)}' --from ${this.publicAddress}${s_opts}`);
-		return this._k_client.execute(p_contract, g_msg, '', a_xfer, g_fee);  // , si_code_hash || void 0
+		return this._k_client.execute(p_contract, g_msg, '', a_xfer, g_fee , si_code_hash || void 0);
 	}
 
 	query(p_contract: string, g_msg: JsonObject, g_params?: JsonObject, si_code_hash?: string): Promise<JsonObject> {
 		console.log(`secretd q compute ${p_contract} '${JSON.stringify(g_msg)}' --from ${this.publicAddress}`);
-		return this._k_client.queryContractSmart(p_contract, g_msg, g_params || {});  // , si_code_hash || void 0
+		return this._k_client.queryContractSmart(p_contract, g_msg, g_params || {}, si_code_hash || void 0);
 	}
 }

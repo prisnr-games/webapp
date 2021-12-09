@@ -62,7 +62,10 @@
 	const X_2PI = X_PI * 2;
 	const X_SQRT_3 = Math.sqrt(3);
 
-	export let k_scene: SceneHelper;
+	export const k_scene: SceneHelper = {
+		animate_chip_entry,
+		animate_chip_exit,
+	};;
 
 	let dm_container: HTMLDivElement;
 
@@ -103,13 +106,127 @@
 
 	let h_textures: Record<string, Texture>;
 
-	onMount(async() => {
-		// set scene helper
-		k_scene = {
-			animate_chip_entry,
-			animate_chip_exit,
-		};
 
+	// player chip
+	let ym_chip: Mesh;
+
+	let yt_chip: Texture;
+	let yt_bump: Texture;
+	let y_scene: Scene;
+
+
+	function create_chip(si_color: CanonicalColor, si_shape: CanonicalShape) {
+		// canvas, context and image from texture
+		const [dm_canvas, d_ctx, dm_img] = canvas_from_tex(h_textures.chip);
+
+		const xl_width = dm_img.width;
+		const xl_height = dm_img.height;
+
+		// draw image to canvas
+		d_ctx.drawImage(dm_img, 0, 0);
+
+		const x_center_x = (xl_width / 2)
+
+		// radius of inner 
+		const xr_draw = x_center_x * (2 / 9);
+
+		// desired area
+		const x_area = Math.pow(x_center_x * (2 / 9), 2) * X_PI;
+
+		// draw shape
+		draw_shape(d_ctx, x_center_x, x_area, si_color, si_shape);
+
+		// use canvas texture
+		yt_chip = new CanvasTexture(dm_canvas);
+
+		// create chip mesh
+		ym_chip = chip(yt_chip, yt_bump);
+
+		// (ym_chip.material as MeshPhongMaterial).map = yt_chip;
+
+		// add chip to scene
+		y_scene.add(ym_chip);
+	}
+
+	async function animate_chip_entry(si_color: CanonicalColor, si_shape: CanonicalShape): Promise<void> {
+		create_chip(si_color, si_shape);
+		
+		// put it way out there
+		ym_chip.position.y = 800000;
+
+		// show chip
+		ym_chip.visible = true;
+
+		const y_tween_pos = new Tween(new Vector3(-780, -2450, -3000))
+			.to(new Vector3(0, 0, 0), 4000)
+			.easing(Easing.Cubic.Out)
+			.onUpdate((yv_pos) => {
+				// ym_chip.position.copy(yv_pos);
+				ym_chip.position.setX(yv_pos.x);
+				ym_chip.position.setZ(yv_pos.z);
+			});
+		
+		y_tween_pos.start();
+
+
+		const y_tween_y = new Tween({y: 750})
+			.to({y: 0}, 4000)
+			.easing(Easing.Back.Out)
+			.onUpdate(({y:x_y}) => {
+				ym_chip.position.setY(x_y);
+			});
+		
+		y_tween_y.start();
+
+		const y_tween_rot = new Tween(new Euler(0, 0, 0))
+			.to(new Euler(0, X_PI / 2, (X_PI / 2) - (X_PI / 6)), 4000)
+			.easing(Easing.Cubic.Out)
+			.onUpdate((yv_rot) => {
+				ym_chip.rotation.set(yv_rot.x, yv_rot.y, yv_rot.z);
+			});
+		
+		y_tween_rot.start();
+
+	};
+
+	async function animate_chip_exit(): Promise<void> {
+		const y_tween_pos = new Tween(new Vector3(0, 0, 0))
+			.to(new Vector3(-780, -2450, -3000), 4000)
+			.easing(Easing.Cubic.Out)
+			.onUpdate((yv_pos) => {
+				// ym_chip.position.copy(yv_pos);
+				ym_chip.position.setX(yv_pos.x);
+				ym_chip.position.setZ(yv_pos.z);
+			});
+		
+		y_tween_pos.start();
+
+
+		const y_tween_y = new Tween({y: 0})
+			.to({y: 750}, 4000)
+			.easing(Easing.Back.Out)
+			.onUpdate(({y:x_y}) => {
+				ym_chip.position.setY(x_y);
+			});
+		
+		y_tween_y.start();
+
+		const y_tween_rot = new Tween(new Euler(0, X_PI / 2, (X_PI / 2) - (X_PI / 6)))
+			.to(new Euler(0, 0, 0), 4000)
+			.easing(Easing.Cubic.Out)
+			.onUpdate((yv_rot) => {
+				ym_chip.rotation.set(yv_rot.x, yv_rot.y, yv_rot.z);
+			});
+		
+		y_tween_rot.start();
+
+		await timeout(4e3);
+
+		// hide chip
+		ym_chip.visible = true;
+	}
+
+	onMount(async() => {
 		h_textures = await load_textures({
 			chip: '/asset/chip.png',
 			chip_displace: '/asset/chip-displacement.png',
@@ -117,7 +234,7 @@
 		});
 
 		// chip texture
-		let yt_chip = h_textures.chip;
+		yt_chip = h_textures.chip;
 		// {
 		// 	// canvas, context and image from texture
 		// 	const [dm_canvas, d_ctx, dm_img] = canvas_from_tex(h_textures.chip);
@@ -144,7 +261,7 @@
 		// }
 
 		// chip bump
-		let yt_bump = h_textures.scuffs;
+		yt_bump = h_textures.scuffs;
 		{
 			// canvas, context and image from texture
 			const [dm_canvas, d_ctx, dm_img] = canvas_from_tex(h_textures.scuffs);
@@ -209,7 +326,7 @@
 		const xr_aspect = xl_width / xl_height;
 
 		// create scene
-		const y_scene = new Scene();
+		y_scene = new Scene();
 
 		// camera
 		const y_camera = new PerspectiveCamera(45, xr_aspect, 1, 5000);
@@ -217,9 +334,6 @@
 			y_camera.position.set(0, 0, 140);
 			y_camera.lookAt(0, 0, 0);
 		}
-
-		// player chip
-		let ym_chip: Mesh;
 
 		// const ym_chip = chip(yt_chip, yt_bump);
 		// {
@@ -259,117 +373,6 @@
 			render();
 			updateTween();
 		});
-
-		function create_chip(si_color: CanonicalColor, si_shape: CanonicalShape) {
-			// canvas, context and image from texture
-			const [dm_canvas, d_ctx, dm_img] = canvas_from_tex(h_textures.chip);
-
-			const xl_width = dm_img.width;
-			const xl_height = dm_img.height;
-
-			// draw image to canvas
-			d_ctx.drawImage(dm_img, 0, 0);
-
-			const x_center_x = (xl_width / 2)
-
-			// radius of inner 
-			const xr_draw = x_center_x * (2 / 9);
-
-			// desired area
-			const x_area = Math.pow(x_center_x * (2 / 9), 2) * X_PI;
-
-			// draw shape
-			draw_shape(d_ctx, x_center_x, x_area, si_color, si_shape);
-
-			// use canvas texture
-			yt_chip = new CanvasTexture(dm_canvas);
-
-			// create chip mesh
-			ym_chip = chip(yt_chip, yt_bump);
-
-			// (ym_chip.material as MeshPhongMaterial).map = yt_chip;
-
-			// add chip to scene
-			y_scene.add(ym_chip);
-		}
-
-		async function animate_chip_entry(si_color: CanonicalColor, si_shape: CanonicalShape): Promise<void> {
-			create_chip(si_color, si_shape);
-			
-			// put it way out there
-			ym_chip.position.y = 800000;
-
-			// show chip
-			ym_chip.visible = true;
-
-			const y_tween_pos = new Tween(new Vector3(-780, -2450, -3000))
-				.to(new Vector3(0, 0, 0), 4000)
-				.easing(Easing.Cubic.Out)
-				.onUpdate((yv_pos) => {
-					// ym_chip.position.copy(yv_pos);
-					ym_chip.position.setX(yv_pos.x);
-					ym_chip.position.setZ(yv_pos.z);
-				});
-			
-			y_tween_pos.start();
-
-
-			const y_tween_y = new Tween({y: 750})
-				.to({y: 0}, 4000)
-				.easing(Easing.Back.Out)
-				.onUpdate(({y:x_y}) => {
-					ym_chip.position.setY(x_y);
-				});
-			
-			y_tween_y.start();
-
-			const y_tween_rot = new Tween(new Euler(0, 0, 0))
-				.to(new Euler(0, X_PI / 2, (X_PI / 2) - (X_PI / 6)), 4000)
-				.easing(Easing.Cubic.Out)
-				.onUpdate((yv_rot) => {
-					ym_chip.rotation.set(yv_rot.x, yv_rot.y, yv_rot.z);
-				});
-			
-			y_tween_rot.start();
-
-		};
-
-		async function animate_chip_exit(): Promise<void> {
-			const y_tween_pos = new Tween(new Vector3(0, 0, 0))
-				.to(new Vector3(-780, -2450, -3000), 4000)
-				.easing(Easing.Cubic.Out)
-				.onUpdate((yv_pos) => {
-					// ym_chip.position.copy(yv_pos);
-					ym_chip.position.setX(yv_pos.x);
-					ym_chip.position.setZ(yv_pos.z);
-				});
-			
-			y_tween_pos.start();
-
-
-			const y_tween_y = new Tween({y: 0})
-				.to({y: 750}, 4000)
-				.easing(Easing.Back.Out)
-				.onUpdate(({y:x_y}) => {
-					ym_chip.position.setY(x_y);
-				});
-			
-			y_tween_y.start();
-
-			const y_tween_rot = new Tween(new Euler(0, X_PI / 2, (X_PI / 2) - (X_PI / 6)))
-				.to(new Euler(0, 0, 0), 4000)
-				.easing(Easing.Cubic.Out)
-				.onUpdate((yv_rot) => {
-					ym_chip.rotation.set(yv_rot.x, yv_rot.y, yv_rot.z);
-				});
-			
-			y_tween_rot.start();
-
-			await timeout(4e3);
-
-			// hide chip
-			ym_chip.visible = true;
-		}
 	});
 </script>
 

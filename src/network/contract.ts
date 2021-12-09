@@ -168,6 +168,11 @@ export interface PickRewardResponse {
 	error?: string,
 }
 
+export interface ForceEndgameResponse {
+	force_endgame?: InnerResponse;
+	error?: string;
+}
+
 export interface QueryGameStateResponse {
 	game_state?: GameStateResponse,
 	error?: string,
@@ -299,6 +304,20 @@ export class GameContract {
 				},
 			],
 			gas: '1000000',
+		});
+	}
+
+	forceEndgame(): Promise<ContractExecInfo<ForceEndgameResponse>> {
+		return this.execute<PickRewardResponse>({
+			force_endgame: {},
+		}, {
+			amount: [
+				{
+					amount: '1000',
+					denom: 'uscrt',
+				},
+			],
+			gas: '40000',
 		});
 	}
 
@@ -575,13 +594,14 @@ interface StatusRpcResponse extends JsonObject {
 	};
 }
 
-const XTL_BLOCK_TIME_AVG = SI_CHAIN.startsWith('pulsar')? 1.98*XTL_SECONDS: 5.99*XTL_SECONDS
-const N_BLOCKS_PER_5_MIN = Math.floor((10*XTL_MINUTES) / XTL_BLOCK_TIME_AVG);
+// const XTL_BLOCK_TIME_AVG = SI_CHAIN.startsWith('pulsar')? 1.98*XTL_SECONDS: 5.99*XTL_SECONDS
+// const N_BLOCKS_PER_5_MIN = Math.floor((10*XTL_MINUTES) / XTL_BLOCK_TIME_AVG);
+const N_BLOCKS_PER_5_MIN = 200;
 console.log(`Imposing global ${N_BLOCKS_PER_5_MIN} blocks per 5 minutes estimate`);
 
 let b_currently_updating = false;
-let s_latest_height: string = '0';
-let s_latest_time: string = (new Date()).toISOString();
+let xg_latest: bigint = 0n;
+let xt_latest = 0;
 let xt_last_update = 0;
 
 async function update_latest() {
@@ -595,11 +615,13 @@ async function update_latest() {
 	try {
 		const g_res = await get_json<RpcResponse<StatusRpcResponse>>(du_endpoint.href);
 
-		({
+		const {
 			latest_block_height: s_latest_height,
 			latest_block_time: s_latest_time,
-		} = g_res.data!.result.sync_info);
+		} = g_res.data!.result.sync_info;
 
+		xg_latest = BigInt(s_latest_height);
+		xt_latest = (new Date(s_latest_time)).getTime();
 		xt_last_update = Date.now();
 	}
 	catch(e_update) {}
@@ -611,7 +633,6 @@ export class EtaEstimator {
 	protected _xg_block_dest: bigint;
 	protected _f_should_update: () => boolean;
 	protected _xt_eta = 0;
-	protected _xg_latest = 0n;
 	protected _xt_updated = 0;
 	protected _b_currently_updating = false;
 
@@ -641,12 +662,13 @@ export class EtaEstimator {
 			await this.fetch_start_time();
 		}
 
-		update_latest();
+		await update_latest();
 
-		const xg_latest = this._xg_latest =  BigInt(s_latest_height);
-		const xt_latest = (new Date(s_latest_time)).getTime();
+		// not enough data to estimate yet
+		const n_span = Number(xg_latest - this._xg_block_start);
+		if(n_span < 5) return 0;
 
-		const xtl_per_block = (xt_latest - this._xt_start) / Number((xg_latest - this._xg_block_start));
+		const xtl_per_block = (xt_latest - this._xt_start) / n_span;
 
 		const n_blocks_remaining = Number(this._xg_block_dest - xg_latest);
 
@@ -661,16 +683,13 @@ export class EtaEstimator {
 		return this._xt_updated;
 	}
 
-	get latestBlock(): bigint {
-		return this._xg_latest;
-	}
 
 	get destinationBlock(): bigint {
 		return this._xg_block_dest;
 	}
 
 	get expired(): boolean {
-		return this.latestBlock >= this.destinationBlock;
+		return xg_latest >= this.destinationBlock;
 	}
 
 	get ready(): boolean {

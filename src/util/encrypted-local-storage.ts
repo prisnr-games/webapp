@@ -10,12 +10,13 @@ import type {
 import type {
 	JsonValue,
 } from '#/util/types';
+import type { JsonObject } from 'secretjs/types/types';
 
 type CipherParams = CryptoJS_lib.CipherParams;
 type WordArray = CryptoJS_lib.WordArray;
 
 export class EncryptedLocalStorage {
-	_si_namespace: string;
+	protected _si_namespace: string;
 	#_s_secret: string;
 
 	static includes(r_test: RegExp): boolean {
@@ -29,8 +30,9 @@ export class EncryptedLocalStorage {
 		return false;
 	}
 
-	constructor(si_namespace: string, s_secret: string) {
-		this._si_namespace = si_namespace;
+	constructor(si_namespace: string, s_secret: string, g_network?: JsonObject) {
+		const s_qualifier = window.btoa(JSON.stringify(g_network || {}));
+		this._si_namespace = `${si_namespace}.${s_qualifier}`;
 		this.#_s_secret = s_secret;
 	}
 

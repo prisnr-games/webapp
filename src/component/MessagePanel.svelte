@@ -775,6 +775,7 @@
 		font-size: 28px;
 		padding: 6px;
 		padding-top: 0;
+		margin-top: -1px;
 
 		.text {
 			font-size: 22px;

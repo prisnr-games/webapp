@@ -60,7 +60,7 @@
 		P_LCD_RPC,
 		Wallet,
 		WalletError,
-uscrt_to_scrt,
+		uscrt_to_scrt,
 	} from '#/network/wallet';
 	
 	import {
@@ -137,7 +137,7 @@ uscrt_to_scrt,
 		SemanticGuess,
 		SubmitResponse,
 		P_CONTRACT_MINTER_ADDR,
-SI_CONTRACT_MINTER_CODE_HASH,
+		SI_CONTRACT_MINTER_CODE_HASH,
 	} from '#/network/contract';
 
 	import {
@@ -149,6 +149,16 @@ SI_CONTRACT_MINTER_CODE_HASH,
 		return w;
 	};
 
+	const G_NETWORK_SUMMARY = {
+		chain_name: S_CHAIN_NAME,
+		chain_id: SI_CHAIN,
+		game_addr: P_CONTRACT_GAME_ADDR,
+		game_hash: SI_CONTRACT_GAME_CODE_HASH,
+		rest: P_LCD_REST,
+		rpc: P_LCD_RPC,
+		minter_addr: P_CONTRACT_MINTER_ADDR,
+		minter_hash: SI_CONTRACT_MINTER_CODE_HASH,
+	};
 
 	/**
 	 * query permit for game
@@ -565,7 +575,7 @@ SI_CONTRACT_MINTER_CODE_HASH,
 		});
 
 		// create encrypted local storage instance
-		const k_ls = new EncryptedLocalStorage(p_signer, [p_fingerprint, s_passphrase, 'salt'].join('|'));
+		const k_ls = new EncryptedLocalStorage(p_signer, [p_fingerprint, s_passphrase, 'salt'].join('|'), G_NETWORK_SUMMARY);
 
 		// try to fetch any existing permits
 		let h_permits: Record<string, Permit> | null = null;
@@ -785,10 +795,49 @@ SI_CONTRACT_MINTER_CODE_HASH,
 		}
 	}
 
+	async function force_endgame() {
+		await k_panel.arbiter(`
+			Your opponent is taking too long. Since you have already fulfilled your duty, I will allow you to end the game and get a refund.
+
+			Would you like to end the game?
+		`);
+
+		await k_panel.reveal_text('yes, give me my money back');
+
+		k_panel.submittable(async() => {
+			k_panel.submittable(null);
+			
+			const g_game = await safe_exec({
+				async exec(): Promise<GameStateResponse> {
+					const g_endgame = (await k_game.forceEndgame()).data.force_endgame!.game_state!
+					
+					void k_panel.commit();
+
+					return g_endgame;
+				},
+				check(g: GameStateResponse): boolean {
+					return null !== g.finished;
+				},
+				query_fail() {
+					void force_endgame();
+					return null;
+				},
+			});
+
+			if(!g_game) return;
+
+			k_panel.unsubmittable();
+
+			k_panel.arbiter(`I have refunded you ${uscrt_to_scrt(BigInt(g_game.wager!))}.`);
+
+			return game_over();
+		});
+	}
 
 	interface CountdownConfig {
 		eta: EtaEstimator;
 		kill_text?: string;
+		terminate?: VoidFunction;
 	}
 
 	interface CountdownInfo {
@@ -806,6 +855,8 @@ SI_CONTRACT_MINTER_CODE_HASH,
 		protected _s_expired = 'run out of time';
 
 		constructor(gc_countdown: CountdownConfig) {
+			const f_terminate = gc_countdown.terminate;
+
 			this._s_kill = gc_countdown.kill_text || '';
 
 			this._k_eta = gc_countdown.eta;
@@ -827,14 +878,17 @@ SI_CONTRACT_MINTER_CODE_HASH,
 					this._yw_time.set(this._s_expired);
 
 					// clear interval
-					this._i_interval = 0;
 					k_killables.delInterval(this._i_interval);
+					this._i_interval = 0;
 
 					// remove clock
 					try {
 						this._dm_clock.remove();
 					}
 					catch(e_remove: unknown) {}
+
+					// termination
+					if(f_terminate) f_terminate();
 
 					// stop
 					return;
@@ -989,16 +1043,7 @@ SI_CONTRACT_MINTER_CODE_HASH,
 
 	onMount(async() => {
 		// debugging info
-		console.log({
-			chain_name: S_CHAIN_NAME,
-			chain_id: SI_CHAIN,
-			game_addr: P_CONTRACT_GAME_ADDR,
-			game_hash: SI_CONTRACT_GAME_CODE_HASH,
-			rest: P_LCD_REST,
-			rpc: P_LCD_RPC,
-			minter_addr: P_CONTRACT_MINTER_ADDR,
-			minter_hash: SI_CONTRACT_MINTER_CODE_HASH,
-		});
+		console.log(G_NETWORK_SUMMARY);
 
 		// ref last seen value
 		const s_last_seen = h_cookie.last_seen;
@@ -1554,6 +1599,7 @@ SI_CONTRACT_MINTER_CODE_HASH,
 				k_countdown_1a2 = new Countdown({
 					eta: new EtaEstimator(g_game.first_round_start_block+''),
 					kill_text: 'also submitted theirs',
+					terminate: force_endgame,
 				});
 
 				// inform
@@ -1732,6 +1778,7 @@ SI_CONTRACT_MINTER_CODE_HASH,
 				k_countdown_1c = new Countdown({
 					eta: new EtaEstimator(g_game.second_submit_turn_start_block+''),
 					kill_text: 'also submitted theirs',
+					terminate: force_endgame,
 				});
 
 				// inform
@@ -1955,6 +2002,7 @@ SI_CONTRACT_MINTER_CODE_HASH,
 				k_countdown_1d = new Countdown({
 					eta: new EtaEstimator(g_game.guess_turn_start_block+''),
 					kill_text: 'now submitted',
+					terminate: force_endgame,
 				});
 
 				await k_panel.arbiter(`${b_wrong? 'Even though you lost': 'However'}, I am still waiting for a guess from your opponent. They have {clock_icon}{time_remaining}.`, {
@@ -2146,6 +2194,7 @@ SI_CONTRACT_MINTER_CODE_HASH,
 				k_countdown_3b = new Countdown({
 					eta: new EtaEstimator(g_game.pick_reward_round_start_block+''),
 					kill_text: 'also picked theirs',
+					terminate: force_endgame,
 				});
 
 				// inform

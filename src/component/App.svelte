@@ -22,6 +22,7 @@
 
 	import {
 		quadInOut,
+		expoOut,
 	} from 'svelte/easing';
 
 	import Fa from 'svelte-fa';
@@ -143,6 +144,7 @@
 	import {
 		EncryptedLocalStorage,
 	} from '#/util/encrypted-local-storage';
+import { Tween } from '@tweenjs/tween.js';
 
 
 	function F_IDENTITY<T extends unknown>(w: T): T {
@@ -260,6 +262,22 @@
 	$: k_deduced = f_assert_2(f_assert_1(k_priori.clone()).clone()).clone();
 
 
+	function quiet_fade(y_audio: HTMLAudioElement) {
+		let x_progress = 0;
+		const XTL_REFRESH = 50;
+		const x_increment = XTL_REFRESH / 5e3;
+		const i_fading = window.setInterval(() => {
+			x_progress += x_increment;
+			if(x_progress >= 1) {
+				window.clearInterval(i_fading);
+			}
+			else {
+				y_audio.volume = 1 - expoOut(x_progress);
+			}
+		}, XTL_REFRESH);
+	}
+
+
 	// preload images
 	// {
 		const d_img_monster = new Image();
@@ -324,7 +342,7 @@
 		k_panel.reveal_text('');
 
 		// show error
-		await k_panel.error(s_text);
+		await err(s_text);
 
 		// show button to reload
 		return reload();
@@ -438,7 +456,7 @@
 		// wallet not yet connected
 		if(!k_wallet) {
 			// prepare for wallet connection
-			await k_panel.warn(`
+			await warn(`
 				This is a multiplayer, online game that uses smart contracts on the Secret Network to ensure fairness for all players.
 
 				Interacting with the game requires submitting transactions to the blockchain via a web wallet such as Keplr (or a local wallet for testnet only).
@@ -557,7 +575,7 @@
 
 		// first time adding
 		if(Date.now() - xt_suggest > XTL_SECONDS) {
-			await k_panel.warn(`Please make sure your network is set to "${S_CHAIN_NAME}" in Keplr!`);
+			await warn(`Please make sure your network is set to "${S_CHAIN_NAME}" in Keplr!`);
 			await timeout(2100);
 		}
 
@@ -583,7 +601,7 @@
 			h_permits = k_ls.get<Record<string, Permit>>('permits');
 		}
 		catch(e_decrypt: unknown) {
-			await k_panel.warn('Change in passphrase detected. Clearing old query perrmits.');
+			await warn('Change in passphrase detected. Clearing old query perrmits.');
 			k_ls.clear();
 		}
 
@@ -601,7 +619,7 @@
 		// permit does not exist for this contract
 		else {
 			// 
-			await k_panel.warn(`
+			await warn(`
 				Query permits allow you to read encrypted data from the blockchain without needing to write anything extra to the chain.
 
 				Signing a query permit happens offline and does not require any gas.
@@ -654,13 +672,13 @@
 		let yw_checked = writable('');
 
 		if(b_resume) {
-			k_panel.warn(`Still waiting for another player... {last_check}`, {
+			warn(`Still waiting for another player... {last_check}`, {
 				last_check: yw_checked,
 			});
 		}
 		else {
 			// TODO: notifications and bell sound
-			k_panel.warn(`Created a new game. Now waiting for another player... {last_check}`, {
+			warn(`Created a new game. Now waiting for another player... {last_check}`, {
 				last_check: yw_checked,
 			});
 		}
@@ -671,7 +689,7 @@
 
 		function enable_notifications() {
 			if(b_notifications_enabled) {
-				k_panel.warn(`You will receive a notification once another player has joined.`);
+				warn(`You will receive a notification once another player has joined.`);
 			}
 			else {
 				const dm_approve = dd('span');
@@ -690,19 +708,19 @@
 						});
 
 						if(Date.now() - xt_prompted < 0.5*XTL_SECONDS) {
-							k_panel.warn(`User previously denied request for notifications. Need to reset in browser settings.`);
+							warn(`User previously denied request for notifications. Need to reset in browser settings.`);
 						}
 						else {
-							k_panel.warn(`User denied request for notification permission.`);
+							warn(`User denied request for notification permission.`);
 						}
 					}
 					else {
-						k_panel.warn(`Confirmed. Notification will be sent when another player joins.`);
+						warn(`Confirmed. Notification will be sent when another player joins.`);
 					}
 				});
 
 				// prompt for notifications
-				k_panel.warn(`Would you like to receive a notification once another player has joined? {approve}`, {
+				warn(`Would you like to receive a notification once another player has joined? {approve}`, {
 					approve: dm_approve,
 				});
 			}
@@ -757,7 +775,30 @@
 		yw_checked.set('');
 
 		// start alarm
-		H_AUDIO.retro_game_alarm.play();
+		{
+			function clear() {
+				window.removeEventListener('focus', quieten);
+			}
+
+			function quieten() {
+				clear();
+				quiet_fade(y_alarm);
+			};
+			
+			const y_alarm = H_AUDIO.retro_game_alarm;
+			y_alarm.play();
+
+			// document has focus already
+			if(document.hasFocus()) {
+				// let alarm play for a few seconds before fading uot
+				await timeout(1800);
+
+				quiet_fade(y_alarm);
+			}
+			else {
+				window.addEventListener('focus', quieten);
+			}
+		}
 
 		return g_game_query;
 	}
@@ -765,13 +806,18 @@
 	// audio
 	const H_AUDIO_SRC = {
 		epic_transition: 'epic-transition.wav',
+		coin: 'coin.wav',
+		death: 'death.wav',
+		menu_1a: 'menu-1a.wav',
+		menu_1b: 'menu-1b.wav',
+		rise: 'rise.wav',
 		coin_win: 'coin-win.wav',
 		retro_game_alarm: 'retro-game-alarm.wav',
 		retro_game_notif: 'retro-game-notif.wav',
 		trumpet_fanfare: 'trumpet-fanfare.wav',
 	} as const;
 
-	const H_AUDIO = Object.fromEntries(ode(H_AUDIO_SRC).map(([si_key, sr_asset]) => [si_key, new Audio(`/asset/${sr_asset}`)])) as Record<keyof typeof H_AUDIO_SRC, HTMLAudioElement>;
+	const H_AUDIO = Object.fromEntries(ode(H_AUDIO_SRC).map(([si_key, sr_asset]) => [si_key, new Audio(`/asset/audio/${sr_asset}`)])) as Record<keyof typeof H_AUDIO_SRC, HTMLAudioElement>;
 
 	// muted
 	let b_muted = false;
@@ -796,7 +842,7 @@
 	}
 
 	async function force_endgame() {
-		await k_panel.arbiter(`
+		await arbiter(`
 			Your opponent is taking too long. Since you have already fulfilled your duty, I will allow you to end the game and get a refund.
 
 			Would you like to end the game?
@@ -828,7 +874,9 @@
 
 			k_panel.unsubmittable();
 
-			k_panel.arbiter(`I have refunded you ${uscrt_to_scrt(BigInt(g_game.wager!))}.`);
+			await arbiter(`I have refunded you ${uscrt_to_scrt(BigInt(g_game.wager!))}.`);
+
+			await H_AUDIO.coin.play();
 
 			return game_over();
 		});
@@ -1007,10 +1055,10 @@
 			// round exists
 			if(null !== g_game.round) {
 				if(g_game.finished) {
-					k_panel.warn(`Fast-forwarding through finished game so you can see the results.`);
+					warn(`Fast-forwarding through finished game so you can see the results.`);
 				}
 				else {
-					k_panel.warn(`Successfully resumed active game.`);
+					warn(`Successfully resumed active game.`);
 				}
 
 				if(0 === g_game.round) {
@@ -1030,7 +1078,7 @@
 					return true;
 				}
 
-				await k_panel.error(`Unrecognized game state round: ${g_game.round}`);
+				await err(`Unrecognized game state round: ${g_game.round}`);
 			}
 		}
 
@@ -1040,6 +1088,84 @@
 
 	let b_surprise = false;
 	let dm_surprise: HTMLElement;
+
+	const clone_audio = (y_audio: HTMLAudioElement) => y_audio.cloneNode() as HTMLAudioElement;
+
+	async function play_menu_1a() {
+		if(b_muted) return;
+		const y_menu = clone_audio(H_AUDIO.menu_1a);
+		y_menu.volume = 0.4;
+
+		try {
+			await y_menu.play();
+		} catch(e_play: unknown) {}
+	}
+
+	async function play_menu_1b() {
+		if(b_muted) return;
+		const y_menu = clone_audio(H_AUDIO.menu_1b);
+		y_menu.volume = 0.4;
+		try {
+			await y_menu.play();
+		} catch(e_play: unknown) {}
+	}
+
+	async function play_notif() {
+		try {
+			await H_AUDIO.rise.play();
+		} catch(e_play: unknown) {}
+	}
+
+	async function play_coin() {
+		const y_coin = clone_audio(H_AUDIO.coin);
+		y_coin.volume = (Math.random()*0.35) + 0.1;
+		try {
+			await y_coin.play();
+		} catch(e_play: unknown) {}
+	}
+
+	async function play_jackpot() {
+		if(b_muted) return;
+
+		for(let i_coin=0; i_coin<10; i_coin++) {
+			void play_coin();
+			await timeout(Math.random() < 0.35? 150: 250);
+		}
+	}
+
+	async function play_death() {
+		const y_death = clone_audio(H_AUDIO.death);
+		try {
+			await y_death.play();
+		} catch(e_play: unknown) {}
+	}
+
+	async function warn(...a_args: any[]): Promise<void> {
+		play_menu_1b();
+		// @ts-expect-error spread
+		return k_panel.warn(...a_args);
+	}
+
+	async function err(...a_args: any[]): Promise<void> {
+		play_menu_1b();
+		// @ts-expect-error spread
+		return k_panel.error(...a_args);
+	}
+
+	async function arbiter(...a_args: any[]): Promise<void> {
+		play_menu_1a();
+		// @ts-expect-error spread
+		return k_panel.arbiter(...a_args);
+	}
+
+	// @ts-ignore
+	Object.assign(window, {
+		H_AUDIO,
+		play_menu_1a,
+		play_menu_1b,
+		play_notif,
+		play_jackpot,
+	});
 
 	onMount(async() => {
 		// debugging info
@@ -1106,7 +1232,7 @@
 		}
 
 		// gameplay explanation                                                                                    |
-		await k_panel.arbiter(`
+		await arbiter(`
 			Welcome${s_last_seen? ' back': ''} to my game of secrets. In a moment, you will be matched with another player.
 
 			I will give each of you a chip with a colored shape on it. There are only four colors (red, green, blue, black), and four shapes (triangle, square, circle, star).
@@ -1148,7 +1274,7 @@
 		const f_condition = gc_exec.condition || gc_exec.query_fail;
 		const f_rejected = gc_exec.rejected || gc_exec.query_fail;
 		
-		let g_game: GameStateResponse;
+		let g_game: GameStateResponse | null;
 
 		// attempt executioon
 		try {
@@ -1198,13 +1324,13 @@
 				}
 				// contract condition exception
 				else if(/execute contract failed/.test(se_exec)) {
-					k_panel.error(`Contract error: ${se_exec}`);
+					err(`Contract error: ${se_exec}`);
 					void f_condition!(e_exec);
 					return null;
 				}
 				// user rejected request
 				else if(/Request rejected/.test(se_exec)) {
-					k_panel.error(`Transaction rejected`);
+					err(`Transaction rejected`);
 					void f_rejected!(e_exec);
 					return null;
 				}
@@ -1212,7 +1338,7 @@
 				else if(/timed out/.test(se_exec)) {
 					const yw_retries = writable('');
 
-					await k_panel.warn(`There was a timeout error while waiting for the transaction to be included. Waiting to see if it gets included... {retries}`, {
+					await warn(`There was a timeout error while waiting for the transaction to be included. Waiting to see if it gets included... {retries}`, {
 						retries: yw_retries,
 					});
 
@@ -1230,7 +1356,7 @@
 						}
 						catch(e_query: unknown) {
 							if(!(e_query instanceof GameStateError)) {
-								await k_panel.error([`Timeout error. Please try again with higher gas fee.`, se_exec]);
+								await err([`Timeout error. Please try again with higher gas fee.`, se_exec]);
 
 								// tx failed; allow user to retry
 								if(gc_exec.query_fail) {
@@ -1246,7 +1372,7 @@
 						if(!g_query!) {
 							// give up
 							if(n_retries >= 5) {
-								await k_panel.error(`Reached maximum retries. Seems like your transaction failed. Try again with higher gas fee?`);
+								await err(`Reached maximum retries. Seems like your transaction failed. Try again with higher gas fee?`);
 
 								// tx failed; allow user to retry
 								if(gc_exec.query_fail) {
@@ -1425,7 +1551,7 @@
 			if(si_quality_first === si_assert_quality) {
 				si_assert_quality = '';
 
-				await k_panel.arbiter(`You cannot submit a message that would contradict your previous assertion.`);
+				await arbiter(`You cannot submit a message that would contradict your previous assertion.`);
 			}
 		}
 
@@ -1517,7 +1643,7 @@
 		await k_panel.reveal_text('');
 
 		// give chip
-		await k_panel.arbiter(`Here is your chip, player...`);
+		await arbiter(`Here is your chip, player...`);
 
 		// animate chip
 		await k_scene.animate_chip_entry(si_player_color, si_player_shape);
@@ -1526,7 +1652,7 @@
 
 		let b_hint_color = si_player_hint.startsWith('color:');
 
-		await k_panel.arbiter(`
+		await arbiter(`
 			Round 1: I've given you the ${si_player_color} ${si_player_shape} this round, and a hint that nobody has ${b_hint_color? '': 'a '}${si_player_hint.replace(/^[^:]+:/, '')}.
 
 			I've also given your opponent a hint. Theirs is that nobody has a certain ${b_hint_color? 'shape': 'color'}.
@@ -1555,7 +1681,7 @@
 			});
 
 			// final instructions
-			await k_panel.arbiter([
+			await arbiter([
 				'Now you must choose what to tell the other player. I will reveal both of your messages simultaneously once they both have been submitted. You have {clock_icon}{time_remaining}.',
 			], {
 				clock_icon: k_countdown_1a.clock,
@@ -1603,7 +1729,7 @@
 				});
 
 				// inform
-				await k_panel.arbiter([
+				await arbiter([
 					'Your submission has been received. Your opponent has {clock_icon}{time_remaining}.',
 				], {
 					clock_icon: k_countdown_1a2.clock,
@@ -1621,6 +1747,8 @@
 		// clear 1b
 		if(k_countdown_1a2) k_countdown_1a2.kill();
 		
+		// not resuming
+		if(!b_resumed) play_notif();
 
 		// premise dom
 		const dm_premise = dd('span');
@@ -1659,7 +1787,7 @@
 			});
 		
 			// inform user
-			await k_panel.arbiter(`
+			await arbiter(`
 				The other player tried to deceive you by submitting a false assertion. You would have known it's false given what you know about your chip and your hint.
 				
 				Instead, I will now reveal to you one of their secrets. They will not know that I have done any of this.
@@ -1738,7 +1866,7 @@
 
 		// final instructions
 		const si_basis_force = 'nobody_has' === g_game.first_submit?.split('|')[0]? 'i_have': 'nobody_has';
-		await k_panel.arbiter([
+		await arbiter([
 			`Both of you must now exchange one more message with each other. This time, I'm requiring you to submit a message about ${'nobody_has' === si_basis_force? 'what "nobody has"': 'your chip'}. You have {clock_icon}{time_remaining}.`,
 		], {
 			clock_icon: k_countdown_1b.clock,
@@ -1782,7 +1910,7 @@
 				});
 
 				// inform
-				await k_panel.arbiter([
+				await arbiter([
 					'Your 2nd submission has been received. Your opponent has {clock_icon}{time_remaining}.',
 				], {
 					clock_icon: k_countdown_1c.clock,
@@ -1796,6 +1924,9 @@
 			// retry
 			return round_1c(await k_game.queryGameState());
 		}
+
+		// not resuming
+		if(!b_resumed) play_notif();
 
 		// premise dom
 		const dm_premise = dd('span');
@@ -1834,7 +1965,7 @@
 			});
 		
 			// inform user
-			await k_panel.arbiter(`
+			await arbiter(`
 				The other player tried to deceive you by submitting a false assertion. You would have known it's false given what you know about your chip and your hint.
 				
 				Instead, I will now reveal to you one of their secrets. They will not know that I have done any of this.
@@ -1902,7 +2033,7 @@
 		});
 
 		// instruction
-		await k_panel.arbiter(`
+		await arbiter(`
 			The time has come for you to surmise my secrets. You may either guess what is in my bag, what your opponent has, or abstain completely. You have {clock_icon}{time_remaining}.
 
 			The precedence for winning is as follows:
@@ -1981,7 +2112,7 @@
 			const [si_target, si_correctness] = si_round!.split('|') as [CanonicalTarget, 'correct' | 'wrong'];
 
 			if('wrong' === si_correctness) {
-				await k_panel.arbiter(`
+				await arbiter(`
 					Sorry, your guess about ${'opponent' === si_target? `your opponent's chip`: `my bag`} was wrong.
 					
 					Guessing wrong is the worst because you automatically lose your wager. Consider abstaining next time if you're unsure.
@@ -1990,7 +2121,7 @@
 				b_wrong = true;
 			}
 			else {
-				await k_panel.arbiter(`Nicely done, your guess about ${'opponent' === si_target? `your opponent's chip`: `my bag`} was correct!`);
+				await arbiter(`Nicely done, your guess about ${'opponent' === si_target? `your opponent's chip`: `my bag`} was correct!`);
 			}
 		}
 
@@ -2005,7 +2136,7 @@
 					terminate: force_endgame,
 				});
 
-				await k_panel.arbiter(`${b_wrong? 'Even though you lost': 'However'}, I am still waiting for a guess from your opponent. They have {clock_icon}{time_remaining}.`, {
+				await arbiter(`${b_wrong? 'Even though you lost': 'However'}, I am still waiting for a guess from your opponent. They have {clock_icon}{time_remaining}.`, {
 					clock_icon: k_countdown_1d.clock,
 					time_remaining: k_countdown_1d.store,
 				});
@@ -2062,7 +2193,7 @@
 						? `But you'll be happy to know that your opponent`
 						: 'Your opponent';
 
-					await k_panel.arbiter([
+					await arbiter([
 						`${b_wrong? 'As you already know': 'Bad news'}, you lost your wager. ${s_opponent_prelude} ${s_opp_summary}, so they ${b_opp_wrong? 'also lost their wager': 'won the game and gained your lost wager'}.`,
 					]);
 
@@ -2075,7 +2206,7 @@
 					const s_wager = uscrt_to_scrt(xg_wager);
 					const s_total = uscrt_to_scrt(xg_wager * 2n);
 
-					await k_panel.arbiter(`
+					await arbiter(`
 						Congratulations, you won! Your opponent ${s_opp_summary}, so they lost their wager.
 						
 						I have refunded you your original ${s_wager} plus an extra ${s_wager} from your opponent's wager for a total of ${s_total}.
@@ -2086,7 +2217,7 @@
 					return game_over();
 				}
 				else {
-					await k_panel.arbiter([
+					await arbiter([
 						`Well done. You and your opponent have tied, so you both can claim a reward. They ${s_opp_summary}.`,
 					]);
 
@@ -2118,7 +2249,9 @@
 			kill_text: 'made your decision'
 		});
 
-		await k_panel.arbiter(`
+		await H_AUDIO.trumpet_fanfare.play();
+
+		await arbiter(`
 			Congratulations on passing round 1 together! I have two rewards to choose from, a jackpot of SCRT, or an NFT that can be used to give you special powers next time you play.
 
 			However, if you both attempt to claim the same prize, then neither of you will take it. You will only be able to take a reward if you and your opponent claim different things.
@@ -2198,7 +2331,7 @@
 				});
 
 				// inform
-				await k_panel.arbiter([
+				await arbiter([
 					'Your pick has been noted. Your opponent has {clock_icon}{time_remaining}.',
 				], {
 					clock_icon: k_countdown_3b.clock,
@@ -2216,29 +2349,35 @@
 		else {
 			switch(si_outcome) {
 				case 'you won jackpot': {
-					await k_panel.arbiter(`
+					void play_jackpot();
+
+					await arbiter(`
 						Fortune favors the bold! Your opponent picked the NFT, and you have successfully claimed the jackpot of ${uscrt_to_scrt(BigInt(g_game.jackpot_reward || '0'))}!
 					`);
 					break;
 				}
 
 				case 'you won nft': {
-					await k_panel.arbiter(`
+					void play_death();
+
+					await arbiter(`
 						Wise move. While your opponent chose the short-term gain, you see the long-term potential. You have successfully claimed an NFT.
 					`);
 					break;
 				}
 
 				case 'you lost reward': {
+					void play_death();
+
 					// both players tried to pick jackpoot
 					if('jackpot' === g_game.pick) {
-						await k_panel.arbiter(`
+						await arbiter(`
 							Greed has spoiled your riches. Both players attempted to claim the jackpot, so you both shall leave empty-handed.
 						`);
 					}
 					// both tried to pick nft
 					else {
-						await k_panel.arbiter(`
+						await arbiter(`
 							An unlucky pick. Both players attempted to claim the NFT, so you both shall leave empty-handed.
 						`);
 					}
@@ -2299,7 +2438,7 @@
 	function burn() {
 		if(!b_burn_clicked) {
 			b_burn_clicked = true;
-			k_panel.error(`The button you just clicked will remove all cookies and cache that the game previously created and then disable the current UI. If you agree to this, click the burn icon again.`);
+			err(`The button you just clicked will remove all cookies and cache that the game previously created and then disable the current UI. If you agree to this, click the burn icon again.`);
 		}
 		else {
 			Object.keys(read_cookie()).forEach(si => delete_cookie(si));

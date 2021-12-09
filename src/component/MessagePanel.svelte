@@ -374,7 +374,7 @@
 				top: `${x_top + x_gap}px`,
 				height: `${x_height - x_gap}px`,
 			});
-			await timeout(120);
+			await timeout(100);
 		}
 
 		dm_curtain.remove();

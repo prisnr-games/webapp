@@ -14,10 +14,22 @@
 </script>
 
 <script lang="ts">
-import { microtask, oderac } from '#/util/belt';
+	import {
+		microtask,
+		oderac,
+	} from '#/util/belt';
 
-	import { quadInOut } from 'svelte/easing';
-	import { fade } from 'svelte/transition';
+	import {
+expoOut,
+		quadIn,
+		quadInOut,
+		quadOut,
+	} from 'svelte/easing';
+
+	import {
+		fade,
+		blur,
+	} from 'svelte/transition';
 
 
 	export const k_prompt = {
@@ -151,7 +163,7 @@ import { microtask, oderac } from '#/util/belt';
 		}
 
 		.fade-in() {
-			transition: filter 3s ease-in-out;
+			transition: filter 2.8s ease-in-out;
 			filter: blur(6px);
 		}
 
@@ -174,7 +186,8 @@ import { microtask, oderac } from '#/util/belt';
 		{#each a_opts as g_opt}
 			<button class="prompt-btn-{g_opt.key}" alt="{g_opt.alt || ''}"
 				on:click={() => answer(g_opt)}
-				transition:fade={{duration:3200, easing:quadInOut}}
+				in:fade={{duration:2800, easing:expoOut}}
+				out:fade={{duration:2800, easing:quadOut}}
 			>
 				{g_opt.label}
 			</button>

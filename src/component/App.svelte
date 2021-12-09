@@ -1525,6 +1525,14 @@ import { Tween } from '@tweenjs/tween.js';
 		reveal_tx();
 	}
 
+	let b_force_rejected = false;
+	function force_reject(g_evt: CustomEvent<[CanonicalBasis, CanonicalBasis]>) {
+		if(b_force_rejected) return;
+		b_force_rejected = true;
+		const [si_prev, si_force] = g_evt.detail;
+		arbiter(`You already used "${H_BASES[si_prev].describe[s_lang]('')}" last turn. Now you must use "${H_BASES[si_force].describe[s_lang]('')}".`);
+	}
+
 	// reset transmission controls after recovering from an error
 	function reset_tx() {
 		// reset quality
@@ -2560,7 +2568,7 @@ import { Tween } from '@tweenjs/tween.js';
 <div class="container">
 	<Prompt bind:k_prompt />
 
-	<Assertion bind:k_tx on:basis={select_basis} on:quality={select_quality} />
+	<Assertion bind:k_tx on:basis={select_basis} on:quality={select_quality} on:force_reject={force_reject} />
 
 	<Decision bind:k_decision {k_deduced} on:abstain={select_abstain} on:change={select_decision} />
 

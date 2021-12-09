@@ -85,6 +85,7 @@
 		const si_basis_test = data(d_event.target!, 'basis') as CanonicalBasis;
 
 		if(si_basis_force && si_basis_test !== si_basis_force) {
+			dispatch('force_reject', [si_basis_test, si_basis_force]);
 			return;
 		}
 

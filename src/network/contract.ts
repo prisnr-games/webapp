@@ -682,7 +682,7 @@ async function update_latest() {
 	}
 
 	const du_endpoint = new URL(P_LCD_RPC);
-	du_endpoint.pathname = '/status';
+	du_endpoint.pathname = '/rpc/status';
 
 	try {
 		const g_res = await get_json<RpcResponse<StatusRpcResponse>>(du_endpoint.href);
@@ -716,7 +716,7 @@ export class EtaEstimator {
 
 	protected async fetch_start_time(): Promise<void> {
 		const du_endpoint = new URL(P_LCD_RPC);
-		du_endpoint.pathname = '/block';
+		du_endpoint.pathname = '/rpc/block';
 
 		const g_res = await get_json<RpcResponse<BlockRpcResponse>>(du_endpoint.href, {
 			search: {

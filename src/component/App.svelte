@@ -141,15 +141,15 @@
 		SubmitResponse,
 		P_CONTRACT_MINTER_ADDR,
 		SI_CONTRACT_MINTER_CODE_HASH,
-MinterContract,
+		MinterContract,
 	} from '#/network/contract';
 
 	import {
 		EncryptedLocalStorage,
 	} from '#/util/encrypted-local-storage';
-import { Tween } from '@tweenjs/tween.js';
-import type { JsonObject } from 'secretjs/types/types';
-import NftCard from './NftCard.svelte';
+	import { Tween } from '@tweenjs/tween.js';
+	import type { JsonObject } from 'secretjs/types/types';
+	import NftCard, { CardInfo } from './NftCard.svelte';
 
 
 	function F_IDENTITY<T extends unknown>(w: T): T {
@@ -770,12 +770,12 @@ import NftCard from './NftCard.svelte';
 
 			xt_checked = Date.now();
 			
-			// wait at least 5 seconds after last response
-			await timeout(5e3);
+			// wait at least 2 seconds after last response
+			await timeout(2e3);
 
-			// query at most every 10 seconds
+			// query at most every 5 seconds
 			const xtl_diff = Date.now() - xt_prev;
-			if(xtl_diff < 10*XTL_SECONDS) {
+			if(xtl_diff < 5*XTL_SECONDS) {
 				await timeout(xtl_diff);
 			}
 		}
@@ -1173,6 +1173,7 @@ import NftCard from './NftCard.svelte';
 
 	let dm_gallery: HTMLElement;
 
+
 	async function display_nfts() {
 		const g_res = await k_minter.queryListNfts();
 
@@ -1182,7 +1183,21 @@ import NftCard from './NftCard.svelte';
 
 		const a_cards: NftCard[] = [];
 
+		const A_CONGRATS = [
+			'Well done that game.',
+			'Good job!',
+			'Yep, I remember that game.',
+			'Nice!',
+			'Beautiful.',
+		];
+
+		let i_congrat = 0;
+
+		const h_clicks: Record<string, number> = {};
+
 		for(const si_token of a_tokens) {
+			h_clicks[si_token] = 0;
+
 			a_cards.push(new NftCard({
 				target: dm_gallery,
 				props: {
@@ -1191,12 +1206,41 @@ import NftCard from './NftCard.svelte';
 				},
 			}));
 		}
+
 	
 		for(let i_nft=0, nl_nfts=a_tokens.length; i_nft<nl_nfts; i_nft++) {
 			const g_nft = await k_minter.queryNftInfo(a_tokens[i_nft]);
 
-			a_cards[i_nft].$set({
+			const yc_card = a_cards[i_nft];
+			yc_card.$set({
 				g_nft,
+			});
+			yc_card.$on('click_card', async(g_evt: CustomEvent<CardInfo>) => {
+				const {
+					token_id: si_token,
+					ext: g_ext,
+				} = g_evt.detail;
+
+				if(h_clicks[si_token]) return;
+				h_clicks[si_token] += 1;
+
+				switch(g_ext.description) {
+					case 'simple': {
+						if(i_congrat >= A_CONGRATS.length) {
+							await arbiter(`Ok, i'm over this...`);
+							i_congrat = -1;
+						}
+						else if(i_congrat >= 0) {
+							await arbiter(A_CONGRATS[i_congrat++]);
+						}
+						break;
+					}
+
+					case 'insurance': {
+						await arbiter('Insurance will protect you in the event that you are eliminated. Your wager will be returned and your opponent will not see any gains.');
+						break;
+					}
+				}
 			});
 		}
 	}
@@ -1363,7 +1407,7 @@ import NftCard from './NftCard.svelte';
 					});
 
 					const dm_a = dd('a', {
-						href: 'https://node.prisnr.games/faucet',
+						href: 'https://faucet.prisnr.games/',
 						target: '_blank',
 					}, [
 						'from the faucet',
@@ -2660,7 +2704,7 @@ import NftCard from './NftCard.svelte';
 	<span class="system-controls-audio" alt="audio" on:click={() => b_muted = !b_muted}>
 		<Fa icon={b_muted? faVolumeMute: faVolumeUp} />
 	</span>
-	<span class="system-controls-faucet" alt="faucet" on:click={() => window.open('https://node.prisnr.games/faucet', '_blank')}>
+	<span class="system-controls-faucet" alt="faucet" on:click={() => window.open('https://faucet.prisnr.games/', '_blank')}>
 		<Fa icon={faFaucet} />
 	</span>
 	{#if (h_cookie && Object.keys(h_cookie).length) || localStorage.length}

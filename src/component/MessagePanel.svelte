@@ -167,6 +167,9 @@
 			i_spinning = 0;
 		}
 
+		// clear evaluation
+		s_evaluation = '';
+
 		if(!b_bypass) {
 			s_revealing = s_reveal;
 		}

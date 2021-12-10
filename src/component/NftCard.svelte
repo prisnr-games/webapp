@@ -2,6 +2,11 @@
 	export interface NftCardHelper {
 		hide(): void;
 	}
+
+	export interface CardInfo {
+		token_id: string;
+		ext: NftMetadata;
+	}
 </script>
 
 <script lang="ts">
@@ -26,11 +31,12 @@
 	} from '@fortawesome/free-solid-svg-icons';
 
 	import type {
-		NftInfoResponse,
+		NftInfoResponse, NftMetadata,
 	} from '#/network/contract';
 
 	import type { IconDefinition } from '@fortawesome/fontawesome-common-types';
 
+	const dispatch = createEventDispatcher();
 
 	export let si_token: string;
 	export let g_nft: NftInfoResponse | null;
@@ -63,11 +69,19 @@
 
 	let y_icon: IconDefinition;
 
+	function click_card() {
+		dispatch('click_card', {
+			token_id: si_token,
+			ext: g_ext,
+		} as CardInfo);
+	}
+
 </script>
 
 <style lang="less">
 	.card {
 		margin-top: 30px;
+		cursor: pointer;
 
 		* {
 			margin-left: auto;
@@ -118,7 +132,7 @@
 	}
 </style>
 
-<div class="card">
+<div class="card" on:click={() => click_card()}>
 	<div class="card-preview" style="background:{sx_bg}">
 		<div class="card-overlay">
 			{#if y_icon}

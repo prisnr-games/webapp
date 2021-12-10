@@ -158,12 +158,7 @@
 	let b_disabled = false;
 	let s_revealing = '';
 
-	async function reveal_text(s_reveal: string, xt_interval=60, xt_pause=0) {
-		s_revealing = s_reveal;
-
-		// set latest
-		let i_latest = ++i_iter;
-
+	async function reveal_text(s_reveal: string, xt_interval=60, xt_pause=0, b_bypass=false) {
 		// clear spinner
 		if(i_spinning) {
 			s_spinner = '';
@@ -171,6 +166,13 @@
 			i_spin = 0;
 			i_spinning = 0;
 		}
+
+		if(!b_bypass) {
+			s_revealing = s_reveal;
+		}
+
+		// set latest
+		let i_latest = ++i_iter;
 
 		if(!xt_interval) xt_interval = 60;
 
@@ -229,7 +231,7 @@
 				i_spinning = -1;
 
 				const s_restore = s_text;
-				await reveal_text(s_restore+' '+A_SPIN[A_SPIN.length-1]+' ');
+				await reveal_text(s_restore+' '+A_SPIN[A_SPIN.length-1]+' ', 60, 0, true);
 				s_text = s_restore;
 
 				function spin() {

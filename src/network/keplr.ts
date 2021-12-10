@@ -44,6 +44,7 @@ import type {
 	AccountChangeCallback,
 	SecretChainInfo,
 } from './wallet';
+import { forever } from '#/util/belt';
 
 
 export class EnableKeplrError extends WalletError {
@@ -86,12 +87,26 @@ export class KeplrWallet implements Wallet {
 	protected _g_key!: Key;
 	protected _a_accounts!: readonly AccountData[];
 	protected _fk_change!: AccountChangeCallback;
+	protected _b_disabled = false;
+	protected _f_change_listener: (() => Promise<void>) | null = null;
 
 	protected constructor(k_keplr: Keplr) {
 		this._k_keplr = k_keplr;
 	}
 
+	disable(): void {
+		// remove change listener
+		if(this._f_change_listener) {
+			window.removeEventListener('keplr_keystorechange', this._f_change_listener);
+		}
+
+		// disable wallet
+		this._b_disabled = true;
+	}
+
 	async enable(g_chain: SecretChainInfo, fk_change: AccountChangeCallback): Promise<boolean> {
+		if(this._b_disabled) return false;
+
 		const si_chain = this._si_chain = g_chain.chainId;
 
 		this._fk_change = fk_change;
@@ -196,7 +211,7 @@ export class KeplrWallet implements Wallet {
 		);
 
 		// listen for change event
-		window.addEventListener('keplr_keystorechange', async() => {
+		window.addEventListener('keplr_keystorechange', this._f_change_listener = async() => {
 			const g_key = await this._k_keplr.getKey(si_chain);
 			if(g_key.bech32Address !== this.publicAddress) {
 				this._fk_change();
@@ -228,6 +243,8 @@ export class KeplrWallet implements Wallet {
 	}
 
 	async signQueryPermit(): Promise<StdSignature> {
+		if(this._b_disabled) return forever<StdSignature>();
+
 		return (await this._k_keplr.signAmino(
 			this.chain,
 			this.publicAddress,
@@ -267,6 +284,8 @@ export class KeplrWallet implements Wallet {
 	}
 
 	execute(p_contract: string, g_msg: JsonObject, a_xfer?: readonly Coin[], g_fee?: StdFee, si_code_hash?: string): Promise<ExecuteResult> {
+		if(this._b_disabled) return forever<ExecuteResult>();
+
 		let s_opts = '';
 		if(g_fee) {
 			s_opts += ` --gas ${g_fee.gas}`;
@@ -275,12 +294,14 @@ export class KeplrWallet implements Wallet {
 			const g_xfer = a_xfer[0];
 			s_opts += ` --amount ${g_xfer.amount}${g_xfer.denom}`;
 		}
-		console.log(`secretd tx compute execute ${p_contract} '${JSON.stringify(g_msg)}' --from ${this.publicAddress}${s_opts}`);
+		// console.log(`secretd tx compute execute ${p_contract} '${JSON.stringify(g_msg)}' --from ${this.publicAddress}${s_opts}`);
 		return this._k_client.execute(p_contract, g_msg, '', a_xfer, g_fee , si_code_hash || void 0);
 	}
 
 	query(p_contract: string, g_msg: JsonObject, g_params?: JsonObject, si_code_hash?: string): Promise<JsonObject> {
-		console.log(`secretd q compute ${p_contract} '${JSON.stringify(g_msg)}' --from ${this.publicAddress}`);
+		if(this._b_disabled) return forever<JsonObject>();
+
+		// console.log(`secretd q compute ${p_contract} '${JSON.stringify(g_msg)}' --from ${this.publicAddress}`);
 		return this._k_client.queryContractSmart(p_contract, g_msg, g_params || {}, si_code_hash || void 0);
 	}
 }

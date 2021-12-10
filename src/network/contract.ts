@@ -213,7 +213,10 @@ const entropyGenerator = (length: number): string => {
 	return str;
 }
 
-export class GameContract {
+
+
+
+export class Contract {
 	protected _k_wallet: Wallet;
 	protected _p_contract: string;
 	protected _g_permit: Permit | null;
@@ -233,6 +236,34 @@ export class GameContract {
 			txnHash: g_result.transactionHash,
 			data: JSON.parse(d_decoder.decode(g_result.data)),
 		};
+	}
+
+	query<Response extends JsonObject>(g_msg: JsonObject): Promise<Response> {
+		if(this._g_permit) {
+			g_msg = {
+				with_permit: {
+					query: g_msg,
+					permit: this._g_permit,
+				},
+			};
+		}
+
+		return this._k_wallet.query(this._p_contract, g_msg);
+	}
+
+}
+
+export class GameContract extends Contract {
+	async queryGameState(): Promise<GameStateResponse> {
+		const g_response = await this.query<QueryGameStateResponse>({
+			game_state: {},
+		});
+
+		if(g_response.error) {
+			throw new ContractError(g_response.error);
+		}
+
+		return g_response.game_state!;
 	}
 
 	// Calls Join function of contract to join a new game
@@ -321,29 +352,60 @@ export class GameContract {
 		});
 	}
 
-	query<Response extends JsonObject>(g_msg: JsonObject): Promise<Response> {
-		if(this._g_permit) {
-			g_msg = {
-				with_permit: {
-					query: g_msg,
-					permit: this._g_permit,
-				},
-			};
-		}
+}
 
-		return this._k_wallet.query(this._p_contract, g_msg);
-	}
+interface TokensResponse extends JsonObject {
+	token_list: {
+		tokens: string[];
+	};
+}
 
-	async queryGameState(): Promise<GameStateResponse> {
-		const g_response = await this.query<QueryGameStateResponse>({
-			game_state: {},
+interface NftMetadata extends JsonObject {
+
+}
+
+interface NftInfoResponse extends JsonObject {
+	nft_info: {
+		token_uri?: string;
+		extension: NftMetadata;
+	};
+}
+
+export class MinterContract extends Contract {
+	async queryListNfts(): Promise<TokensResponse> {
+		const g_response = await this.query<TokensResponse>({
+			tokens: {
+				owner: this._k_wallet.publicAddress,
+			},
 		});
 
 		if(g_response.error) {
 			throw new ContractError(g_response.error);
 		}
 
-		return g_response.game_state!;
+		return g_response!;
+	}
+
+	async queryNftInfo(si_token: string): Promise<NftInfoResponse> {
+		const g_response = await this.query<NftInfoResponse>({
+			nft_info: {
+				token_id: si_token,
+			},
+		});
+
+		if(g_response.error) {
+			throw new ContractError(g_response.error);
+		}
+
+		return g_response!;
+	}
+
+	async *queryNfts(): AsyncGenerator<NftInfoResponse> {
+		const g_list = await this.queryListNfts();
+
+		for(const si_token of g_list.token_list.tokens) {
+			yield await this.queryNftInfo(si_token);
+		}
 	}
 }
 

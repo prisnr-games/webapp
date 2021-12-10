@@ -55,6 +55,10 @@ export function timeout(xt_wait: number): Promise<void> {
 	});
 };
 
+export function forever<T>(): Promise<T> {
+	return new Promise(() => {});
+}
+
 export function microtask(): Promise<void> {
 	return new Promise((fk_resolve) => {
 		queueMicrotask(() => {

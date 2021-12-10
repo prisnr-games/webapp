@@ -139,6 +139,7 @@
 		SubmitResponse,
 		P_CONTRACT_MINTER_ADDR,
 		SI_CONTRACT_MINTER_CODE_HASH,
+MinterContract,
 	} from '#/network/contract';
 
 	import {
@@ -536,6 +537,10 @@ import { Tween } from '@tweenjs/tween.js';
 				rest: P_LCD_REST,
 				rpc: P_LCD_RPC,
 			}, () => {
+				// disable wallett
+				k_wallet.disable();
+
+				// terminate session
 				return fatal(`Account was changed in wallet. Session terminated.`);
 			});
 		}
@@ -760,6 +765,9 @@ import { Tween } from '@tweenjs/tween.js';
 			}
 
 			xt_checked = Date.now();
+			
+			// wait at least 5 seconds after last response
+			await timeout(5e3);
 
 			// query at most every 10 seconds
 			const xtl_diff = Date.now() - xt_prev;
@@ -825,7 +833,8 @@ import { Tween } from '@tweenjs/tween.js';
 	// read cookie
 	let h_cookie = read_cookie();
 
-	// game
+	// game and minter
+	let k_minter: MinterContract;
 	let k_game: GameContract;
 
 
@@ -855,11 +864,7 @@ import { Tween } from '@tweenjs/tween.js';
 			
 			const g_game = await safe_exec({
 				async exec(): Promise<GameStateResponse> {
-					const g_endgame = (await k_game.forceEndgame()).data.force_endgame!.game_state!
-					
-					void k_panel.commit();
-
-					return g_endgame;
+					return (await k_game.forceEndgame()).data.force_endgame!.game_state!
 				},
 				check(g: GameStateResponse): boolean {
 					return null !== g.finished;
@@ -868,9 +873,12 @@ import { Tween } from '@tweenjs/tween.js';
 					void force_endgame();
 					return null;
 				},
+				persist_reveal: true,
 			});
 
 			if(!g_game) return;
+
+			await k_panel.commit();
 
 			k_panel.unsubmittable();
 
@@ -1158,6 +1166,13 @@ import { Tween } from '@tweenjs/tween.js';
 		return k_panel.arbiter(...a_args);
 	}
 
+	async function display_nfts() {
+		for await(const g_nft of k_minter.queryNfts()) {
+			debugger;
+			console.log(g_nft);
+		}
+	}
+
 	// @ts-ignore
 	Object.assign(window, {
 		H_AUDIO,
@@ -1204,6 +1219,12 @@ import { Tween } from '@tweenjs/tween.js';
 
 		// connect wallet
 		await connect_wallet();
+
+		// instantiate minter contract
+		k_minter = new MinterContract(k_wallet, P_CONTRACT_MINTER_ADDR, g_permit);
+
+		// check for existing NFTs
+		void display_nfts();
 
 		// instantiate game contract
 		k_game = new GameContract(k_wallet, P_CONTRACT_GAME_ADDR, g_permit);
@@ -1255,6 +1276,7 @@ import { Tween } from '@tweenjs/tween.js';
 		check: (g_game: GameStateResponse) => boolean;
 		rejected?: (e_fail?: unknown) => Promise<GameStateResponse | null> | null;
 		condition?: (e_fail?: unknown) => Promise<GameStateResponse | null> | null;
+		persist_reveal?: boolean;
 	}
 
 	class GameStateError extends Error {}
@@ -1291,7 +1313,9 @@ import { Tween } from '@tweenjs/tween.js';
 				b_waiting = false;
 
 				// clear text and stop spinning
-				k_panel.reveal_text('');
+				if(!gc_exec.persist_reveal) {
+					k_panel.reveal_text('');
+				}
 			}
 		}
 		// failed
@@ -1322,6 +1346,11 @@ import { Tween } from '@tweenjs/tween.js';
 				else if(/contract not found/i.test(se_exec)) {
 					return fatal(`Contract not found! Are you on the right network?`);
 				}
+				// game is finished
+				else if(/Game is finished/i.test(se_exec)) {
+					void game_over();
+					return new Promise(() => {});
+				}
 				// contract condition exception
 				else if(/execute contract failed/.test(se_exec)) {
 					err(`Contract error: ${se_exec}`);
@@ -1351,6 +1380,14 @@ import { Tween } from '@tweenjs/tween.js';
 
 							if(!f_check(g_query)) {
 								console.warn(`query permit check failed on game state`, g_query);
+
+								// game is finished?
+								if(g_query.finished) {
+									await arbiter(`Your opponent ended the game because you took too long to respond.`)
+									await game_over();
+									return null;
+								}
+								
 								g_query = null;
 							}
 						}
@@ -1415,8 +1452,8 @@ import { Tween } from '@tweenjs/tween.js';
 
 		console.log(g_game);
 
-		// clear prompt
-		k_panel.reveal_text('');
+		// // clear prompt
+		// k_panel.reveal_text('');
 
 		// // destructure join results
 		// const {
@@ -1477,7 +1514,7 @@ import { Tween } from '@tweenjs/tween.js';
 		}
 		// resume round 3
 		else if(3 === g_game.round) {
-			return fatal('round_3()');
+			return round_1a(g_game);
 		}
 		else {
 			console.error(g_game);
@@ -1615,12 +1652,14 @@ import { Tween } from '@tweenjs/tween.js';
 					void select_quality(g_evt);
 					return null;
 				},
+				persist_reveal: true,
 			});
 
 			if(!g_game) return;
 
 			// commit text to message history
 			await k_panel.commit();
+			k_panel.spinning(false);
 
 			// success
 			if(k_countdown_1a) k_countdown_1a.kill();
@@ -2073,11 +2112,7 @@ import { Tween } from '@tweenjs/tween.js';
 
 			const g_game = await safe_exec({
 				async exec(): Promise<GameStateResponse> {
-					const g_guess = (await k_game.submitGuess(g_opt)).data.guess!.game_state!
-					
-					void k_panel.commit();
-
-					return g_guess;
+					return (await k_game.submitGuess(g_opt)).data.guess!.game_state!;
 				},
 				check(g: GameStateResponse): boolean {
 					return null !== g.guess;
@@ -2087,9 +2122,15 @@ import { Tween } from '@tweenjs/tween.js';
 					void prepare_guess(g_opt);
 					return null;
 				},
+				persist_reveal: true,
 			});
 
 			if(!g_game) return;
+
+			await k_panel.commit();
+
+			// remove submit button
+			k_panel.unsubmittable();
 
 			// stop countdown for guess submissioin
 			k_countdown_1c2.kill();
@@ -2259,6 +2300,8 @@ import { Tween } from '@tweenjs/tween.js';
 
 		await H_AUDIO.trumpet_fanfare.play();
 
+		await timeout(1500);
+
 		await arbiter(`
 			Congratulations on passing round 1 together! I have two rewards to choose from, a jackpot of SCRT, or an NFT that can be used to give you special powers next time you play.
 
@@ -2287,16 +2330,15 @@ import { Tween } from '@tweenjs/tween.js';
 		await k_panel.reveal_text(`i pick the ${si_pick}`);
 
 		k_panel.submittable(async() => {
+			// disable submission
+			k_panel.submittable(null);
+
 			// hide pick ui
 			k_pick.hide();
 
 			const g_game = await safe_exec({
 				async exec(): Promise<GameStateResponse> {
-					const g_guess = (await k_game.pickReward(si_pick)).data.pick_reward!.game_state!
-					
-					void k_panel.commit();
-
-					return g_guess;
+					return (await k_game.pickReward(si_pick)).data.pick_reward!.game_state!
 				},
 				check(g: GameStateResponse): boolean {
 					return null !== g.pick;
@@ -2306,9 +2348,16 @@ import { Tween } from '@tweenjs/tween.js';
 					void select_pick(g_evt);
 					return null;
 				},
+				persist_reveal: true,
 			});
 
 			if(!g_game) return;
+
+			// commit
+			await k_panel.commit();
+
+			// remove submission
+			k_panel.unsubmittable();
 
 			round_3b(g_game);
 		});
@@ -2377,7 +2426,7 @@ import { Tween } from '@tweenjs/tween.js';
 				case 'you lost reward': {
 					void play_death();
 
-					// both players tried to pick jackpoot
+					// both players tried to pick jackpot
 					if('jackpot' === g_game.pick) {
 						await arbiter(`
 							Greed has spoiled your riches. Both players attempted to claim the jackpot, so you both shall leave empty-handed.

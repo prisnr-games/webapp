@@ -354,18 +354,28 @@ export class GameContract extends Contract {
 
 }
 
-interface TokensResponse extends JsonObject {
+export interface TokensResponse extends JsonObject {
 	token_list: {
 		tokens: string[];
 	};
 }
 
-interface NftMetadata extends JsonObject {
-
+export interface NftMetadata extends JsonObject {
+	animation_url: null;
+	attributes: null;
+	background_color: string;
+	description: string;
+	external_url: null;
+	image: string;
+	image_data: null;
+	media: null;
+	name: string;
+	protected_attributes: null;
+	youtube_url: null;
 }
 
-interface NftInfoResponse extends JsonObject {
-	nft_info: {
+export interface NftInfoResponse extends JsonObject {
+	private_metadata: {
 		token_uri?: string;
 		extension: NftMetadata;
 	};
@@ -388,7 +398,7 @@ export class MinterContract extends Contract {
 
 	async queryNftInfo(si_token: string): Promise<NftInfoResponse> {
 		const g_response = await this.query<NftInfoResponse>({
-			nft_info: {
+			private_metadata: {
 				token_id: si_token,
 			},
 		});

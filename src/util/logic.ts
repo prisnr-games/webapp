@@ -66,7 +66,7 @@ export function use_quality_in_sentence(si_semantic: SemanticQuality): string {
 export function use_assertion_in_sentence(si_assertion: SemanticAssertion): string {
 	const [si_basis, si_quality] = si_assertion.split('|') as [CanonicalBasis, SemanticQuality];
 
-	return `${'nobody_has' === si_basis? 'nobody has ': 'my shape is'} ${use_quality_in_sentence(si_quality)}`;
+	return `${'nobody_has' === si_basis? 'nobody has ': 'my chip is'} ${use_quality_in_sentence(si_quality)}`;
 }
 
 export interface CanonicalGuessOption {

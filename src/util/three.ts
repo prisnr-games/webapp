@@ -23,7 +23,7 @@ export function chip(y_texture: Texture, y_bump: Texture): Mesh {
 
 	const a_materials = [
 		new MeshToonMaterial({
-			color: 'red',
+			color: '#FF6510',
 		}),
 		// new MeshToonMaterial({
 		// 	map: y_texture,

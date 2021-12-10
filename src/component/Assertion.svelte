@@ -176,13 +176,13 @@
 
 	.tx-colors {
 		position: absolute;
-		left: calc(50% - 420px);
+		left: calc(50% - 380px);
 		top: 80px;
 	}
 
 	.tx-shapes {
 		position: absolute;
-		left: calc(50% + 420px - 100px);
+		left: calc(50% + 380px - 100px);
 		top: 80px;
 		font-size: 23px;
 	}

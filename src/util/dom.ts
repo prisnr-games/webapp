@@ -1,3 +1,6 @@
+import { ode } from './belt';
+import type { JsonValue } from './types';
+
 type Hash = Record<string, string>;
 
 type Split<S extends string, D extends string> = S extends `${infer T}${D}${infer U}` ? [T, ...Split<U, D>] : [S];
@@ -111,9 +114,40 @@ export function read_cookie(): Record<string, string> {
 	}, {});
 }
 
-export function write_cookie(h_cookie: Record<string, string>, xt_expires: number) {
+export function read_cookie_json<T extends JsonValue=JsonValue>(si_key: string): T {
+	const h_cookie = read_cookie();
+
+	if(!(si_key in h_cookie)) return null;
+
+	let w_value: JsonValue;
+	try {
+		w_value = JSON.parse(h_cookie[si_key]);
+	}
+	catch(e_parse) {
+		console.error(`failed to parse cookie JSON value associated with key '${si_key}'`);
+		delete_cookie(si_key);
+	}
+
+	return w_value;
+}
+
+export function write_cookie(h_cookie: Record<string, JsonValue>, xt_expires: number) {
+	const h_serialize: Record<string, string> = {};
+
+	for(const [si_key, z_value] of ode(h_cookie)) {
+		if('string' === typeof z_value) {
+			h_serialize[si_key] = z_value;
+		}
+		else if(null === z_value || 'undefined' === typeof z_value) {
+			delete_cookie(si_key);
+		}
+		else {
+			h_serialize[si_key] = JSON.stringify(z_value);
+		}
+	}
+
 	document.cookie = Object.entries({
-		...h_cookie,
+		...h_serialize,
 		'max-age': ''+xt_expires,
 	})
 		.map(([si_key, s_value]) => `${si_key}=${s_value}`)

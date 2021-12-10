@@ -96,7 +96,7 @@ export const H_BASES = {
 	},
 	i_have: {
 		describe: {
-			en: (s: string) => `my shape is ${s || '...'}`,
+			en: (s: string) => `my chip is ${s || '...'}`,
 		},
 	},
 } as const;

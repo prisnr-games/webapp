@@ -32,6 +32,7 @@
 		faVolumeUp,
 		faVolumeMute,
 		faFire,
+		faFaucet,
 	} from '@fortawesome/free-solid-svg-icons';
 
 	import fingerprintjs from '@fingerprintjs/fingerprintjs';
@@ -75,6 +76,7 @@
 		delete_cookie,
 		qs,
 		read_cookie,
+		read_cookie_json,
 		write_cookie,
 	} from '#/util/dom';
 
@@ -107,7 +109,7 @@
 		SemanticShapeQuality,
 	} from '#/util/logic';
 
-	import MessagePanel, {MessagePanelHelper} from './MessagePanel.svelte';
+	import MessagePanel, {MessagePanelHelper, Widgets} from './MessagePanel.svelte';
 	import Prompt, {PromptHelper} from './Prompt.svelte';
 	import Assertion, {AssertionHelper} from './Assertion.svelte';
 	import Scene, {SceneHelper} from './Scene.svelte';
@@ -146,6 +148,8 @@ MinterContract,
 		EncryptedLocalStorage,
 	} from '#/util/encrypted-local-storage';
 import { Tween } from '@tweenjs/tween.js';
+import type { JsonObject } from 'secretjs/types/types';
+import NftCard from './NftCard.svelte';
 
 
 	function F_IDENTITY<T extends unknown>(w: T): T {
@@ -335,7 +339,7 @@ import { Tween } from '@tweenjs/tween.js';
 		return new Promise(() => {});
 	}
 
-	async function fatal(s_text: string): Promise<never> {
+	async function fatal(s_text: string, h_widgets?: Widgets): Promise<never> {
 		// kill all pending intervals and timeouts
 		k_killables.killAll();
 
@@ -343,7 +347,7 @@ import { Tween } from '@tweenjs/tween.js';
 		k_panel.reveal_text('');
 
 		// show error
-		await err(s_text);
+		await err(s_text, true, h_widgets);
 
 		// show button to reload
 		return reload();
@@ -1166,21 +1170,36 @@ import { Tween } from '@tweenjs/tween.js';
 		return k_panel.arbiter(...a_args);
 	}
 
+
+	let dm_gallery: HTMLElement;
+
 	async function display_nfts() {
-		for await(const g_nft of k_minter.queryNfts()) {
-			debugger;
-			console.log(g_nft);
+		const g_res = await k_minter.queryListNfts();
+
+		if(!g_res?.token_list?.tokens) return;
+
+		const a_tokens = g_res.token_list.tokens;
+
+		const a_cards: NftCard[] = [];
+
+		for(const si_token of a_tokens) {
+			a_cards.push(new NftCard({
+				target: dm_gallery,
+				props: {
+					si_token,
+					g_nft: null,
+				},
+			}));
+		}
+	
+		for(let i_nft=0, nl_nfts=a_tokens.length; i_nft<nl_nfts; i_nft++) {
+			const g_nft = await k_minter.queryNftInfo(a_tokens[i_nft]);
+
+			a_cards[i_nft].$set({
+				g_nft,
+			});
 		}
 	}
-
-	// @ts-ignore
-	Object.assign(window, {
-		H_AUDIO,
-		play_menu_1a,
-		play_menu_1b,
-		play_notif,
-		play_jackpot,
-	});
 
 	onMount(async() => {
 		// debugging info
@@ -1230,13 +1249,19 @@ import { Tween } from '@tweenjs/tween.js';
 		k_game = new GameContract(k_wallet, P_CONTRACT_GAME_ADDR, g_permit);
 
 		// a game was started
-		if(h_cookie.game) {
+		const g_active = read_cookie_json<Record<string, string>>('game');
+		if(g_active && g_active[k_wallet.publicAddress]) {
 			const b_exit = await try_resume_game();
 			
 			if(b_exit) return;
 
 			// no active game
-			delete_cookie('game');
+			write_cookie({
+				game: {
+					...(read_cookie_json<JsonObject>('game') || {}),
+					[k_wallet.publicAddress]: '',
+				},
+			}, 30*XTL_DAYS);
 		}
 
 		// new user or late returning
@@ -1328,12 +1353,42 @@ import { Tween } from '@tweenjs/tween.js';
 
 				// no scrt
 				if(/Account does not exist/.test(se_exec)) {
-					return fatal(`Looks like your wallet is empty. Make sure to acquire some SCRT tokens so that you can pay the gas fees for transactions.`);
+					const dm_icon = dd('span');
+
+					new Fa({
+						target: dm_icon,
+						props: {
+							icon: faFaucet,
+						},
+					});
+
+					const dm_a = dd('a', {
+						href: 'https://node.prisnr.games/faucet',
+						target: '_blank',
+					}, [
+						'from the faucet',
+					]);
+
+					Object.assign(dm_a.style, {
+						color: 'white',
+					});
+
+					dm_icon.append(dm_a);
+
+					const yw_faucet = writable('from the faucet');
+
+					return fatal(`Looks like your wallet is empty. Make sure to acquire some SCRT tokens {faucet} so that you can pay the gas fees for transactions.`, {
+						faucet: dm_icon,
+						// faucet: yw_faucet,
+					});
 				}
 				// already in active game
-				else if(/must finish current game/.test(se_exec)) {
+				else if(/must finish current game/.test(se_exec)) {;
 					write_cookie({
-						game: 'started',
+						game: {
+							...(read_cookie_json<JsonObject>('game') || {}),
+							[k_wallet.publicAddress]: 'active',
+						},
 					}, 12*XTL_HOURS);
 
 					// retry
@@ -1501,7 +1556,10 @@ import { Tween } from '@tweenjs/tween.js';
 		if(0 === g_game_join.round) {
 			// record that a game was started
 			write_cookie({
-				game: 'started',
+				game: {
+					...(read_cookie_json<JsonObject>('game') || {}),
+					[k_wallet.publicAddress]: 'active',
+				},
 			}, 12*XTL_HOURS);
 
 			// wait for other player
@@ -1521,7 +1579,10 @@ import { Tween } from '@tweenjs/tween.js';
 
 			// record that a game was started
 			write_cookie({
-				game: 'started',
+				game: {
+					...(read_cookie_json<JsonObject>('game') || {}),
+					[k_wallet.publicAddress]: 'active',
+				},
 			}, 12*XTL_HOURS);
 
 			return fatal('Failed to join game while waiting for transaction. You can try once more by reloading this page.');
@@ -1705,18 +1766,15 @@ import { Tween } from '@tweenjs/tween.js';
 			I've also given your opponent a hint. Theirs is that nobody has a certain ${b_hint_color? 'shape': 'color'}.
 		`);
 
-		// resuming
-		if(b_resumed) {
-			// player already submitted 1st assertion
-			if(g_game.first_submit) {
-				await k_panel.user(use_assertion_in_sentence(g_game.first_submit));
+		// player already submitted 1st assertion
+		if(g_game.first_submit) {
+			await k_panel.user(use_assertion_in_sentence(g_game.first_submit));
 
-				// already beyond round 1a; skip ahead
-				return round_1b(g_game, b_resumed);
-			}
+			// already beyond round 1a; skip ahead
+			return round_1b(g_game, b_resumed);
 		}
 		// not resumed
-		else {
+		else if(!b_resumed) {
 			await timeout(4.1e3);
 		}
 
@@ -1892,17 +1950,14 @@ import { Tween } from '@tweenjs/tween.js';
 			return fatal(`Fatal system error: unable to parse game state`);
 		}
 
-		// resuming
-		if(b_resumed) {
-			// user has already submitted 2nd assertioon
-			if(g_game.second_submit) {
-				await k_panel.user(use_assertion_in_sentence(g_game.second_submit));
+		// user has already submitted 2nd assertioon
+		if(g_game.second_submit) {
+			await k_panel.user(use_assertion_in_sentence(g_game.second_submit));
 
-				return round_1c(g_game, b_resumed);
-			}
+			return round_1c(g_game, b_resumed);
 		}
 		// not resumed
-		else {
+		else if(!b_resumed) {
 			await timeout(4.1e3);
 		}
 
@@ -2063,15 +2118,12 @@ import { Tween } from '@tweenjs/tween.js';
 			return fatal(`Fatal system error: unable to parse game state`);
 		}
 
-		// resuming
-		if(b_resumed) {
-			// user has already submitted guess
-			if(g_game.guess) {
-				await k_panel.user(use_guess_in_sentence(g_game.guess));
+		// user has already submitted guess
+		if(g_game.guess) {
+			await k_panel.user(use_guess_in_sentence(g_game.guess));
 
-				// proceed too next stage
-				return round_1d(g_game, b_resumed);
-			}
+			// proceed too next stage
+			return round_1d(g_game, b_resumed);
 		}
 
 		k_countdown_1c2 = new Countdown({
@@ -2594,11 +2646,22 @@ import { Tween } from '@tweenjs/tween.js';
 		animation: surprise 100ms steps(4, jump-none) 2;
 	}
 
+	.gallery {
+		position: fixed;
+		left: calc(50% - 400px - 150px);
+		top: 0;
+		width: 120px;
+		height: 100%;
+		background-color: fade(white, 5%);
+	}
 </style>
 
 <div class="system-controls">
 	<span class="system-controls-audio" alt="audio" on:click={() => b_muted = !b_muted}>
 		<Fa icon={b_muted? faVolumeMute: faVolumeUp} />
+	</span>
+	<span class="system-controls-faucet" alt="faucet" on:click={() => window.open('https://node.prisnr.games/faucet', '_blank')}>
+		<Fa icon={faFaucet} />
 	</span>
 	{#if (h_cookie && Object.keys(h_cookie).length) || localStorage.length}
 		<span class="system-controls-burn" alt="destroy cookies and cache" on:click={() => burn()} transition:fade={{duration:1e3}}>
@@ -2639,4 +2702,7 @@ import { Tween } from '@tweenjs/tween.js';
 
 	<Scene bind:k_scene />
 
+	<div class="gallery" bind:this={dm_gallery}>
+
+	</div>
 </div>

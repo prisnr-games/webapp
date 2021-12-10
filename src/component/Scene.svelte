@@ -112,7 +112,9 @@
 
 	let yt_chip: Texture;
 	let yt_bump: Texture;
-	let y_scene: Scene;
+	
+	// create scene
+	const y_scene = new Scene();;
 
 
 	function create_chip(si_color: CanonicalColor, si_shape: CanonicalShape) {
@@ -324,9 +326,6 @@
 		dm_container.appendChild(y_renderer.domElement);
 
 		const xr_aspect = xl_width / xl_height;
-
-		// create scene
-		y_scene = new Scene();
 
 		// camera
 		const y_camera = new PerspectiveCamera(45, xr_aspect, 1, 5000);

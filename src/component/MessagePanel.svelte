@@ -20,7 +20,7 @@
 		arbiter(z_text: TextInput, h_widgets?: Widgets): Promise<void>;
 		opponent(a_text: string[], h_widgets?: Widgets): Promise<void>;
 		user(z_text: string | string[], h_widgets?: Widgets): Promise<void>;
-		error(z_text: TextInput, b_fatal?: boolean): Promise<void>;
+		error(z_text: TextInput, b_fatal?: boolean, h_widgets?: Widgets): Promise<void>;
 		warn(z_text: TextInput, h_widgets?: Widgets): Promise<void>;
 		wallet(g_addr: AddrInfo): void;
 		permit(g_params: PermitParams, b_restored?: boolean): void;
@@ -423,11 +423,12 @@
 		s_text = '';
 	}
 
-	async function error(z_text: TextInput, b_fatal=false): Promise<void> {
+	async function error(z_text: TextInput, b_fatal=false, h_widgets?: Widgets): Promise<void> {
 		await receive({
 			from: 'System',
 			classes: ['from-system-error'],
 			text: rerformat_lines(z_text),
+			widgets: h_widgets || {},
 		});
 
 		if(b_fatal) {

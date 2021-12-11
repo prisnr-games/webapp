@@ -353,14 +353,19 @@
 		return reload();
 	}
 
-	async function surprise() {
+	async function surprise(s_surprise: string) {
 		// play transition
-		const s_suspense = '                                 ';
-		await k_panel.reveal_text(s_suspense);
+		let s_suspense = '';
+		if(!s_surprise) {
+			s_suspense = '                                 ';
+			await k_panel.reveal_text(s_suspense);
+		}
 
 		H_AUDIO.epic_transition.play();
 		
-		void k_panel.reveal_text(s_suspense+'  ', 250);
+		if(!s_suspense) {
+			void k_panel.reveal_text(s_suspense+'  ', 250);
+		}
 
 		dm_surprise.classList.add('triggered')
 		await timeout(160);
@@ -370,6 +375,12 @@
 		setTimeout(() => {
 			dm_surprise.style.display = 'none';
 		}, 6e3);
+
+		if(!s_surprise) {
+			write_cookie({
+				surprise: 'bypass',
+			}, 12*XTL_DAYS);
+		}
 
 		// allow surprise to settle
 		await timeout(2000);
@@ -1195,6 +1206,7 @@
 
 		const h_clicks: Record<string, number> = {};
 
+		let i_card = 0;
 		for(const si_token of a_tokens) {
 			h_clicks[si_token] = 0;
 
@@ -1203,6 +1215,7 @@
 				props: {
 					si_token,
 					g_nft: null,
+					i_card: i_card++,
 				},
 			}));
 		}
@@ -1309,9 +1322,10 @@
 		}
 
 		// new user or late returning
-		if(!s_last_seen) {
+		const s_surprise = h_cookie.surprise;
+		if('bypass' !== s_surprise) {
 			// surprise >:)
-			await surprise();
+			await surprise(s_surprise);
 
 			// run introduction
 			await introduction();
@@ -2256,7 +2270,14 @@
 
 			const [si_target, si_correctness] = si_round!.split('|') as [CanonicalTarget, 'correct' | 'wrong'];
 
-			if('wrong' === si_correctness) {
+			if('abstain' === si_target) {
+				await arbiter(`
+					Very brave to abstain, player.
+				`);
+			}
+			else if('wrong' === si_correctness) {
+				void H_AUDIO.death.play();
+
 				await arbiter(`
 					Sorry, your guess about ${'opponent' === si_target? `your opponent's chip`: `my bag`} was wrong.
 					
@@ -2341,6 +2362,8 @@
 					await arbiter([
 						`${b_wrong? 'As you already know': 'Bad news'}, you lost your wager. ${s_opponent_prelude} ${s_opp_summary}, so they ${b_opp_wrong? 'also lost their wager': 'won the game and gained your lost wager'}.`,
 					]);
+						
+					void H_AUDIO.death.play();
 
 					await timeout(9e3);
 
@@ -2356,6 +2379,8 @@
 						
 						I have refunded you your original ${s_wager} plus an extra ${s_wager} from your opponent's wager for a total of ${s_total}.
 					`);
+
+					await H_AUDIO.coin.play();
 
 					await timeout(9e3);
 

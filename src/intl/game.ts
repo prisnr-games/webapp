@@ -113,6 +113,9 @@ export const H_TARGETS = {
 	opponent: {
 		label: 'Opponent',
 	},
+	abstain: {
+		label: 'Abstain',
+	},
 };
 
 export type CanonicalTarget = keyof typeof H_TARGETS;

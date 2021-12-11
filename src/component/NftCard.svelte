@@ -40,6 +40,7 @@
 
 	export let si_token: string;
 	export let g_nft: NftInfoResponse | null;
+	export let i_card: number;
 
 	$: g_ext = g_nft?.private_metadata.extension;
 
@@ -132,7 +133,7 @@
 	}
 </style>
 
-<div class="card" on:click={() => click_card()}>
+<div class="card" on:click={() => click_card()} transition:fade={{delay:i_card*800}}>
 	<div class="card-preview" style="background:{sx_bg}">
 		<div class="card-overlay">
 			{#if y_icon}

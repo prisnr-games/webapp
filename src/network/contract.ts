@@ -278,7 +278,7 @@ export class GameContract extends Contract {
 					denom: 'uscrt',
 				},
 			],
-			gas: '35000',
+			gas: '40000',
 		}, [
 			{
 				denom: 'uscrt',

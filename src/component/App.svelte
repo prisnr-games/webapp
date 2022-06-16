@@ -2729,7 +2729,7 @@
 	<span class="system-controls-audio" alt="audio" on:click={() => b_muted = !b_muted}>
 		<Fa icon={b_muted? faVolumeMute: faVolumeUp} />
 	</span>
-	<span class="system-controls-faucet" alt="faucet" on:click={() => window.open('https://faucet.prisnr.games/', '_blank')}>
+	<span class="system-controls-faucet" alt="faucet" on:click={() => window.open('https://faucet.secrettestnet.io/', '_blank')}>
 		<Fa icon={faFaucet} />
 	</span>
 	{#if (h_cookie && Object.keys(h_cookie).length) || localStorage.length}

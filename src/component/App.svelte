@@ -1421,7 +1421,7 @@
 					});
 
 					const dm_a = dd('a', {
-						href: 'https://faucet.prisnr.games/',
+						href: 'https://faucet.secrettestnet.io/',
 						target: '_blank',
 					}, [
 						'from the faucet',

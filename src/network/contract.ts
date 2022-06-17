@@ -53,7 +53,7 @@ export interface ContractExecInfo<Wrapped extends JsonObject> {
 	data: Wrapped;
 };
 
-const SN_DEFAULT_WAGER = '1000000';
+const SN_DEFAULT_WAGER = '10000000';
 
 const d_decoder = new TextDecoder();
 
@@ -72,7 +72,7 @@ export interface GameStateResponse {
 	// 0: waiting for second player, 1: first round, 3: reward round
 	round: 0 | 1 | 3 | null,
 
-	// currently must be default wager "1000000" uscrt
+	// currently must be default wager "10000000" uscrt
 	wager: string | null,
 
 	// one of "red", "green", "blue", "black"

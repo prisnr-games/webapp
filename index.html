@@ -5,6 +5,7 @@
 	<meta name='viewport' content='width=device-width,initial-scale=1'>
 
 	<title>Prisnr.games</title>
+	<meta name="application-name" content="prisnr.games">
 
 	<link rel="shortcut icon" href="/favicon.ico">
 	<link rel="icon" sizes="16x16 32x32 64x64" href="/favicon.ico">
@@ -28,6 +29,28 @@
 	<meta name="msapplication-config" content="/browserconfig.xml">
 
 	<link rel='stylesheet' href='/global.css'>
+
+	<link rel="prefetch" as="image" href="/asset/gamepad-solid.svg" data-caip-10="cosmos:pulsar-2:secret1jyxjyrmd3nrs2yrupyvl6ptexpr6y4uyn785dc">
+
+	<link rel="prefetch" as="image" href="/asset/trophy-solid.svg" data-caip-10="cosmos:pulsar-2:secret1vux78y49ehf29kf7pjujvwsa2td6dyyxkkslne">
+
+	<script type="application/toml" data-whip-003>
+		[chains.secret-pulsar]
+		namespace = "cosmos"
+		reference = "pulsar-2"
+		label = "Secret Pulsar}"
+		bech32s = "secret"
+
+		[contracts.game]
+		chain = "cosmos:pulsar-2"
+		address = "secret1jyxjyrmd3nrs2yrupyvl6ptexpr6y4uyn785dc"
+		label = "Game Contract"
+
+		[contracts.minter]
+		chain = "cosmos:pulsar-2"
+		address = "secret1vux78y49ehf29kf7pjujvwsa2td6dyyxkkslne"
+		label = "NFT Awards Minter"
+	</script>
 
 	<script>
 		if (global === undefined) {

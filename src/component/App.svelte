@@ -2754,7 +2754,7 @@
 	<Decision bind:k_decision {k_deduced} on:abstain={select_abstain} on:change={select_decision} />
 
 	{#if si_player_hint}
-		<div class="mine" in:blur={{duration:1.1e3, easing:quadInOut, delay:4.5e3}} out:blur={{duration:2.4e3, easing:quadInOut}}>
+		<div class="mine" in:blur={{duration:2.4e3, easing:quadInOut, delay:4.5e3}} out:blur={{duration:2.4e3, easing:quadInOut}}>
 			<div class="chip">
 				The {proper(si_player_color)} {proper(si_player_shape)}
 			</div>

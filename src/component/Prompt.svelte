@@ -163,7 +163,7 @@ expoOut,
 		}
 
 		.fade-in() {
-			transition: filter 2.8s ease-in-out;
+			transition: filter 1.4s ease-in-out;
 			filter: blur(6px);
 		}
 
@@ -186,8 +186,8 @@ expoOut,
 		{#each a_opts as g_opt}
 			<button class="prompt-btn-{g_opt.key}" alt="{g_opt.alt || ''}"
 				on:click={() => answer(g_opt)}
-				in:fade={{duration:2800, easing:expoOut}}
-				out:fade={{duration:2800, easing:quadOut}}
+				in:fade={{duration:1.4e3, easing:expoOut}}
+				out:fade={{duration:1.4e3, easing:quadOut}}
 			>
 				{g_opt.label}
 			</button>

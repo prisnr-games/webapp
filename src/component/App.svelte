@@ -387,16 +387,16 @@
 	}
 
 	async function connect_wallet(n_retries=0): Promise<void> {
-		// 
-		await k_panel.warn(`
-			This game stores encrypted query permit data in local storage.
+		// // 
+		// await k_panel.warn(`
+		// 	This game stores encrypted query permit data in local storage.
 			
-			In order to protect this data, you must provide a passphrase each time the page is loaded.
+		// 	In order to protect this data, you must provide a passphrase each time the page is loaded.
 
-			${EncryptedLocalStorage.includes(/\.permits$/)
-				? `Enter the same passphrase to restore a previous permit, or enter a different one to sign a new permit.`
-				: ''}
-		`);
+		// 	${EncryptedLocalStorage.includes(/\.permits$/)
+		// 		? `Enter the same passphrase to restore a previous permit, or enter a different one to sign a new permit.`
+		// 		: ''}
+		// `);
 
 		async function enter_passphrase(c_retries=0): Promise<string> {
 			// whether it was clicked (before instruction)
@@ -463,8 +463,9 @@
 		const g_result = y_agent.get();
 		const p_fingerprint = (await g_result).visitorId;
 
-		// get passphrase
-		const s_passphrase = await enter_passphrase();
+		// // get passphrase
+		// const s_passphrase = await enter_passphrase();
+		const s_passphrase = p_fingerprint;
 
 		// clear text
 		k_panel.reveal_text('');
@@ -473,10 +474,9 @@
 		if(!k_wallet) {
 			// prepare for wallet connection
 			await warn(`
-				This is a multiplayer, online game that uses smart contracts on the Secret Network to ensure fairness for all players.
-
-				Interacting with the game requires submitting transactions to the blockchain via a web wallet such as Keplr (or a local wallet for testnet only).
+				This is a multiplayer, online game that uses hidden-state smart contracts on the Secret Network testnet.
 			`);
+			// Interacting with the game requires submitting transactions to the blockchain via a web wallet.
 
 			// pause for effect
 			await timeout(600);
@@ -484,11 +484,11 @@
 			// wait for response
 			const si_opt = await k_prompt.opts({
 				keplr: KeplrWallet.isAvailable()? {
-					label: 'Connect Keplr',
-					alt: `Connect a wallet using the Keplr extension for Chrome`,
+					label: 'Connect Wallet',
+					alt: `Connect a wallet using a Keplr-compatible wallet`,
 				}: {
-					label: 'Install Keplr',
-					alt: `Keplr was not detected. Please install it first in order to use this option`,
+					label: 'Install StarShell',
+					alt: `Wallet was not detected. Please install one first in order to use this option`,
 				},
 				// local: {
 				// 	label: 'Use Local Storage',
@@ -507,7 +507,7 @@
 					// could keplr is not installed
 					catch(e_keplr) {
 						// open keplr in new tab
-						window.open('https://www.keplr.app/', '_blank');
+						window.open('https://chrome.google.com/webstore/detail/starshell-wallet-beta/hgohnepiegfjmmdifckdbmnpiheehmjl', '_blank');
 
 						// show button to reload
 						return await reload();
@@ -565,7 +565,7 @@
 			// user did not enable
 			if(e_enable instanceof EnableKeplrError) {
 				if(n_retries >= 3) {
-					return fatal(`Keplr connection request rejected too many times`);
+					return fatal(`Wallet connection request rejected too many times`);
 				}
 
 				// pause
@@ -591,12 +591,6 @@
 		// user rejected chain
 		if(!b_added) {
 			return fatal(`Chain suggestion was denied. Unable to proceed.`);
-		}
-
-		// first time adding
-		if(Date.now() - xt_suggest > XTL_SECONDS) {
-			await warn(`Please make sure your network is set to "${S_CHAIN_NAME}" in Keplr!`);
-			await timeout(2100);
 		}
 
 		// get key store
@@ -640,7 +634,7 @@
 		else {
 			// 
 			await warn(`
-				Query permits allow you to read encrypted data from the blockchain without needing to write anything extra to the chain.
+				Query permits let this game read encrypted data from the blockchain.
 
 				Signing a query permit happens offline and does not require any gas.
 			`);
@@ -1337,13 +1331,16 @@
 
 		// gameplay explanation                                                                                    |
 		await arbiter(`
-			Welcome${s_last_seen? ' back': ''} to my game of secrets. In a moment, you will be matched with another player.
+			Welcome${s_last_seen? ' back': ''} to my game of secrets! In a moment, you will be matched with another player.
 
-			I will give each of you a chip with a colored shape on it. There are only four colors (red, green, blue, black), and four shapes (triangle, square, circle, star).
+			I will pick 3 chips at random, and give one to each of you. Each chip has a unique color and unique shape on it. There are four colors, and four shapes.
 
-			Your opponent will not be able to see your chip and vice versa. I will also take a third chip and hide it in a bag. Each chip will have a unique color and a unique shape. For example, if the chip in my bag is a red triangle, then nobody else has red, and nobody else has a triangle.
+			The third chip is mine. As an example, if I have a red triangle, then nobody else has red nor a triangle.
 
-			The rules are simple. You and your opponent must exchange a message with each other. Cooperate to deduce what is in my bag and you both will advance to the next round. Betray your opponent by correctly guessing which chip they have and win their wager. Guess wrong and lose.
+			The rules are simple. Exchange two messages with your opponent.
+			 - Cooperate to deduce what's in my bag and advance to the next round.
+			 - Or, betray your opponent by guessing what they have and steal their wager.
+			 - Guess wrong and lose!
 		`);
 
 		// beat

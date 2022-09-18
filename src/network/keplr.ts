@@ -150,8 +150,8 @@ export class KeplrWallet implements Wallet {
 					},
 				],
 				gasPriceStep: {
-					low: 0.1,
-					average: 0.25,
+					low: 0.4,
+					average: 0.4,
 					high: 0.4,
 				},
 				features: ['secretwasm'],

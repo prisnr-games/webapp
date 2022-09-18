@@ -253,6 +253,8 @@ export class Contract {
 
 }
 
+const XG_BASE_FEE = 180_000n;
+
 export class GameContract extends Contract {
 	async queryGameState(): Promise<GameStateResponse> {
 		const g_response = await this.query<QueryGameStateResponse>({
@@ -274,11 +276,11 @@ export class GameContract extends Contract {
 		}, {
 			amount: [
 				{
-					amount: '8750',
+					amount: '81000',
 					denom: 'uscrt',
 				},
 			],
-			gas: '40000',
+			gas: ''+XG_BASE_FEE,
 		}, [
 			{
 				denom: 'uscrt',
@@ -300,11 +302,11 @@ export class GameContract extends Contract {
 		} as SubmitMsg, {
 			amount: [
 				{
-					amount: '10000',
+					amount: '65000',
 					denom: 'uscrt',
 				},
 			],
-			gas: '40000',
+			gas: ''+XG_BASE_FEE,
 		});
 	}
 
@@ -314,11 +316,11 @@ export class GameContract extends Contract {
 		} as GuessMsg, {
 			amount: [
 				{
-					amount: '10000',
+					amount: '65000',
 					denom: 'uscrt',
 				},
 			],
-			gas: '40000',
+			gas: ''+XG_BASE_FEE,
 		});
 	}
 
@@ -334,7 +336,7 @@ export class GameContract extends Contract {
 					denom: 'uscrt',
 				},
 			],
-			gas: '1000000',
+			gas: ''+(25n * XG_BASE_FEE),
 		});
 	}
 
@@ -344,11 +346,11 @@ export class GameContract extends Contract {
 		}, {
 			amount: [
 				{
-					amount: '1000',
+					amount: '65000',
 					denom: 'uscrt',
 				},
 			],
-			gas: '40000',
+			gas: ''+XG_BASE_FEE,
 		});
 	}
 
@@ -682,7 +684,7 @@ async function update_latest() {
 	}
 
 	const du_endpoint = new URL(P_LCD_RPC);
-	du_endpoint.pathname = '/rpc/status';
+	du_endpoint.pathname = '/status';
 
 	try {
 		const g_res = await get_json<RpcResponse<StatusRpcResponse>>(du_endpoint.href);
@@ -716,11 +718,11 @@ export class EtaEstimator {
 
 	protected async fetch_start_time(): Promise<void> {
 		const du_endpoint = new URL(P_LCD_RPC);
-		du_endpoint.pathname = '/rpc/block';
+		du_endpoint.pathname = '/block';
 
 		const g_res = await get_json<RpcResponse<BlockRpcResponse>>(du_endpoint.href, {
 			search: {
-				block: this._xg_block_start+'',
+				height: this._xg_block_start+'',
 			},
 		});
 

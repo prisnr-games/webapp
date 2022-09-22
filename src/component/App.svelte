@@ -504,10 +504,10 @@
 					try {
 						k_wallet = KeplrWallet.fromWindow();
 					}
-					// could keplr is not installed
+					// wallet not installed
 					catch(e_keplr) {
-						// open keplr in new tab
-						window.open('https://chrome.google.com/webstore/detail/starshell-wallet-beta/hgohnepiegfjmmdifckdbmnpiheehmjl', '_blank');
+						// open install in new tab
+						window.open('https://install.starshell.net/?redirect', '_blank');
 
 						// show button to reload
 						return await reload();

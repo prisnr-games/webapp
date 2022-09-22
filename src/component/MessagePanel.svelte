@@ -158,7 +158,7 @@
 	let b_disabled = false;
 	let s_revealing = '';
 
-	async function reveal_text(s_reveal: string, xt_interval=60, xt_pause=0, b_bypass=false) {
+	async function reveal_text(s_reveal: string, xt_interval=40, xt_pause=0, b_bypass=false) {
 		// clear spinner
 		if(i_spinning) {
 			s_spinner = '';

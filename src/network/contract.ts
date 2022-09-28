@@ -332,7 +332,7 @@ export class GameContract extends Contract {
 		} as PickRewardMsg, {
 			amount: [
 				{
-					amount: '1000',
+					amount: '56250',
 					denom: 'uscrt',
 				},
 			],

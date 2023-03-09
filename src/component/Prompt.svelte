@@ -163,8 +163,8 @@ expoOut,
 		}
 
 		.fade-in() {
-			transition: filter 1.4s ease-in-out;
-			filter: blur(6px);
+			transition: filter 800ms ease-in-out;
+			filter: blur(2px);
 		}
 
 		@fade-in-btns: ok, keplr, local;

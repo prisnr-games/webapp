@@ -2635,7 +2635,7 @@
 		position: absolute;
 		width: 400px;
 		text-align: center;
-		background-color: fade(white, 5%);
+		background-color: rgba(13, 13, 13, 0.8);
 		padding: 7px 22px;
 		font-family: 'Roboto Mono';
 		border-radius: 5px;

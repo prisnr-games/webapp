@@ -645,6 +645,13 @@
 
 		.msg-nav-group {
 			margin: 0 6px;
+
+			display: inline-flex;
+			max-width: 30%;
+			white-space: nowrap;
+			overflow: hidden;
+			gap: 6px;
+			align-items: center;
 		}
 
 		.msg-nav-name {
@@ -786,6 +793,10 @@
 		.text {
 			font-size: 22px;
 			white-space: pre-wrap;
+
+			@media screen and (max-width: 800px) {
+				font-size: 16px;
+			}
 		}
 	
 		.cursor {
@@ -824,6 +835,10 @@
 		cursor: pointer;
 
 		transition: color 0.5s ease-in-out;
+
+		@media screen and (max-width: 800px) {
+			padding: 6px 12px;
+		}
 
 		&.active {
 			animation: pulse-border 4s linear 0s infinite;

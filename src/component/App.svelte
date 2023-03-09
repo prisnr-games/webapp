@@ -2641,9 +2641,15 @@
 		border-radius: 5px;
 		left: calc(50% - 200px);
 		box-sizing: border-box;
-		top: 105px;
 		color: white;
 		font-size: 15px;
+
+		top: 105px;
+
+		@media screen and (max-width: 800px) {
+			top: unset;
+			bottom: 20px;
+		}
 
 		.chip {
 			font-size: 1.6em;

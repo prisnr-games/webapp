@@ -1,4 +1,4 @@
-# SCRT Prisoners
+# prisnr.games
 
 ## Getting Started
 
